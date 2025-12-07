@@ -1,0 +1,73 @@
+[build-system]
+requires = [
+    "setuptools",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+requires-python = ">=3.10"
+name = "visioanry"
+readme = "README.md"
+dynamic = [
+    "version",
+]
+dependencies = [
+    "ipython>=8.10",
+    "jupyterlab>=3.0",
+    "notebook",
+    "kedro~=1.1.1",
+]
+
+[project.scripts]
+visioanry = "visioanry.__main__:main"
+
+[project.entry-points."kedro.hooks"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest-cov>=3,<7",
+    "pytest-mock>=1.7.1, <2.0",
+    "pytest~=7.2",
+    "ruff~=0.12.0",
+]
+
+[tool.setuptools.dynamic.version]
+attr = "visioanry.__version__"
+
+[tool.setuptools.packages.find]
+where = [
+    "src",
+]
+namespaces = false
+
+[tool.kedro]
+package_name = "visioanry"
+project_name = "Visioanry"
+kedro_init_version = "1.1.1"
+tools = "['Linting', 'Data Structure']"
+example_pipeline = "False"
+source_dir = "src"
+
+[tool.ruff]
+line-length = 88
+show-fixes = true
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = [
+    "F",
+    "W",
+    "E",
+    "I",
+    "UP",
+    "PL",
+    "T201",
+]
+ignore = [
+    "E501",
+]
+
+[tool.kedro_telemetry]
+project_id = "384032a7d54c474b89dd180d4bd56c92"
