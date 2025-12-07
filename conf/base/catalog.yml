@@ -2,3 +2,15 @@
 #
 # Documentation for this file format can be found in "The Data Catalog"
 # Link: https://docs.kedro.org/en/stable/data/data_catalog.html
+sales_train_data:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/train.csv
+
+sales_test_data:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/test.csv
+
+# This is a HTML report of the sales data plot
+sales_graph_html:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/08_reporting/sales_graph.html
