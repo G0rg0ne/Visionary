@@ -7,32 +7,38 @@ import plotly.express as px
 
 def plot_sales_data(sales_data: pd.DataFrame) -> str:
     """
-    Plot the sales data from both train and test sets and return the HTML representation of the graph.
+    Plot the sales data from the training set and return the HTML representation of the graph.
 
     Args:
-        sales_train_data (pd.DataFrame): Training sales data.
-        sales_test_data (pd.DataFrame): Test sales data.
-
-    Columns expected:
-        - Store
-        - DayOfWeek
-        - Date
-        - Sales
-        - Customers
-        - Open
-        - Promo
-        - StateHoliday
-        - SchoolHoliday
+        sales_data (pd.DataFrame): Training sales data.
     """
     #format the date column to be a date
     sales_data['Date'] = pd.to_datetime(sales_data['Date'])
     #format the store column to be a string
     sales_data['Store'] = sales_data['Store'].astype(str)
-    fig_train = px.line(
-        sales_data,
+    daily_sales = sales_data.groupby('Date')['Sales'].sum().reset_index()
+    fig1 = px.line(
+        daily_sales,
         x='Date',
         y='Sales',
-        color='Store',
-        title='Train Sales Over Time by Store',
+        title='Total Daily Sales Over Time'
     )
-    return fig_train.to_html(full_html=False)
+    
+    return fig1.to_html(full_html=False)
+
+def plot_top_10_stores_by_total_sales(sales_data: pd.DataFrame) -> str:
+    """
+    Plot the top 10 stores by total sales and return the HTML representation of the graph.
+
+    Args:
+        sales_data (pd.DataFrame): Training sales data.
+    """
+    store_totals = sales_data.groupby('Store')['Sales'].sum().nlargest(10)
+    fig_top_10_stores = px.bar(
+        x=store_totals.index.astype(str),
+        y=store_totals.values,
+        title='Top 10 Stores by Total Sales',
+        labels={'x': 'Store', 'y': 'Total Sales'}
+    )
+    return fig_top_10_stores.to_html(full_html=False)
+

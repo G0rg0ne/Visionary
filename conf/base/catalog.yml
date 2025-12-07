@@ -14,3 +14,7 @@ sales_test_data:
 sales_graph_html:
   type: kedro_datasets.text.TextDataset
   filepath: data/08_reporting/sales_graph.html
+
+top_10_stores_by_total_sales_graph_html:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/08_reporting/top_10_stores_by_total_sales_graph.html
