@@ -7,6 +7,16 @@
 This is your new Kedro project, which was generated using `kedro 1.1.1`.
 
 Take a look at the [Kedro documentation](https://docs.kedro.org) to get started.
+## Development Process and Kedro Viz Output
+
+During development, we visualize our data pipelines using **Kedro Viz**, which provides a clear and interactive overview of data workflows.
+
+Below is a screenshot of the Kedro Viz output for this project:
+
+![Kedro Viz Pipeline Visualization](assets/image.png)
+
+*Kedro Viz* helps showcase the data flow, node outputs, and dependencies at each stage of the pipeline, facilitating rapid iteration and improving clarity during the development process.
+
 
 ## Rules and guidelines
 
