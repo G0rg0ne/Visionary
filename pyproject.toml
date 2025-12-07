@@ -16,6 +16,8 @@ dependencies = [
     "jupyterlab>=3.0",
     "notebook",
     "kedro~=1.1.1",
+    "plotly-express>=0.4.1",
+    "kedro-datasets>=9.0.0",
 ]
 
 [project.scripts]
