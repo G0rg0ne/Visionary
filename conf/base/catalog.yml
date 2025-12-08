@@ -10,6 +10,10 @@ sales_test_data:
   type: pandas.CSVDataset
   filepath: data/01_raw/test.csv
 
+stores_info:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/store.csv
+
 # This is a HTML report of the sales data plot
 sales_graph_html:
   type: kedro_datasets.text.TextDataset
@@ -18,3 +22,7 @@ sales_graph_html:
 top_10_stores_by_total_sales_graph_html:
   type: kedro_datasets.text.TextDataset
   filepath: data/08_reporting/top_10_stores_by_total_sales_graph.html
+
+correlation_matrix_html:
+  type: kedro_datasets.text.TextDataset
+  filepath: data/08_reporting/correlation_matrix.html
