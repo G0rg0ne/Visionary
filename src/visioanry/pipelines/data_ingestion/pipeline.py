@@ -7,6 +7,7 @@ from kedro.pipeline import Node, Pipeline  # noqa
 from .nodes import (
     plot_sales_data,
     plot_top_10_stores_by_total_sales,
+    correlation_matrix,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -23,4 +24,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs="sales_train_data",
             outputs="top_10_stores_by_total_sales_graph_html",
             name="plot_top_10_stores_by_total_sales"),
+        Node(
+            correlation_matrix,
+            inputs="sales_train_data",
+            outputs="correlation_matrix_html",
+            name="correlation_matrix"),
     ])

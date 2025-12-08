@@ -42,3 +42,15 @@ def plot_top_10_stores_by_total_sales(sales_data: pd.DataFrame) -> str:
     )
     return fig_top_10_stores.to_html(full_html=False)
 
+def correlation_matrix(sales_data: pd.DataFrame) -> str:
+    """
+    Plot the correlation matrix of the sales data and return the HTML representation of the graph.
+
+    Args:
+        sales_data (pd.DataFrame): Training sales data.
+    """
+    correlation_columns = ['Sales', 'Customers', 'Open', 'Promo', 'SchoolHoliday']
+    correlation_data = sales_data[correlation_columns]
+    correlation_matrix = correlation_data.corr()
+    fig_correlation_matrix = px.imshow(correlation_matrix, title='Correlation Matrix')
+    return fig_correlation_matrix.to_html(full_html=False)
