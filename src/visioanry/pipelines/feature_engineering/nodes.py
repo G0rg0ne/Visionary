@@ -19,32 +19,63 @@ def aggegate_sales_data(sales_data: pd.DataFrame, stores_info: pd.DataFrame) -> 
     aggregated_sales_data = sales_data.merge(stores_info, on='Store', how='left')
     return aggregated_sales_data
 
+def extract_holidays(sales_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract holidays from the sales data.
 
-def feature_engineering(aggregated_sales_data: pd.DataFrame) -> pd.DataFrame:
+    Args:
+        sales_data (pd.DataFrame): Sales data.
+    """
+    holiday_data = sales_data[['Date', 'StateHoliday']].copy()
+    holiday_data = holiday_data.drop_duplicates()
+    holiday_data['StateHoliday'] =  holiday_data['StateHoliday'].astype(str)
+    holiday_data = holiday_data[holiday_data['StateHoliday'] != '0']
+    holiday_map = {
+        'a': 'PublicHoliday',
+        'b': 'Easter',
+        'c': 'Christmas'
+    }
+    holiday_data['holiday'] = holiday_data['StateHoliday'].map(holiday_map)
+    prophet_holidays = holiday_data[['Date', 'holiday']].rename(columns={'Date': 'ds'})
+    return prophet_holidays
+
+def split_data_dates(sales_data: pd.DataFrame, split_date: str) -> pd.DataFrame:
+    """
+    Split the sales data into training and testing sets.
+    """
+    sales_data['Date'] = pd.to_datetime(sales_data['Date'])
+    sales_data = sales_data.sort_values(by='Date')
+    split_date = pd.to_datetime(split_date)
+
+    sales_data_training = sales_data[sales_data['Date'] < split_date]
+    sales_data_testing = sales_data[sales_data['Date'] >= split_date]
+
+    return sales_data_training, sales_data_testing
+
+
+def feature_engineering(sales_data: pd.DataFrame) -> pd.DataFrame:
     """
     Perform feature engineering on the aggregated sales data.
 
     Args:
         aggregated_sales_data (pd.DataFrame): Aggregated sales data.
     """
-    #format the date column to be a date
-    aggregated_sales_data['Date'] = pd.to_datetime(aggregated_sales_data['Date'])
-    #add a column for the day of the week
-    aggregated_sales_data['DayOfWeek'] = aggregated_sales_data['Date'].dt.dayofweek
-    #add a column for the month
-    aggregated_sales_data['Month'] = aggregated_sales_data['Date'].dt.month
-    #add a column for the year
-    aggregated_sales_data['Year'] = aggregated_sales_data['Date'].dt.year
-    #add a column for the day of the month
-    aggregated_sales_data['DayOfMonth'] = aggregated_sales_data['Date'].dt.day
-    #add a column for the day of the year
-    aggregated_sales_data['DayOfYear'] = aggregated_sales_data['Date'].dt.dayofyear
-    #one hot encode StoreType
-    aggregated_sales_data = pd.get_dummies(aggregated_sales_data, columns=['StoreType'])
-    #one hot encode Assortment
-    aggregated_sales_data = pd.get_dummies(aggregated_sales_data, columns=['Assortment'])
-    #one hot encode StateHoliday
-    aggregated_sales_data = pd.get_dummies(aggregated_sales_data, columns=['StateHoliday'])
+    
+    store_holidays = extract_holidays(sales_data)
 
-    import pdb; pdb.set_trace()
-    return aggregated_sales_data
+    store_id_to_train = 262
+    split_date = '2015-06-19'
+    #filter data for the store id to train
+    sales_data = sales_data[sales_data['Open'] == 1].copy()
+    sales_data = sales_data.drop(columns=['Customers'])
+    sales_data = sales_data[sales_data['Store'] == store_id_to_train]
+
+    sales_data_training, sales_data_testing = split_data_dates(sales_data, split_date)
+
+    store_train = sales_data_training.copy()
+    store_test = sales_data_testing.copy()
+    
+    df_prophet = store_train.rename(columns={'Date': 'ds', 'Sales': 'y'})
+    future = store_test.rename(columns={'Date': 'ds'})
+
+    return df_prophet, future, store_holidays

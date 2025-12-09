@@ -13,15 +13,15 @@ from .nodes import (
 def create_pipeline(**kwargs) -> Pipeline:
     return Pipeline(
         [
-            Node(
-                aggegate_sales_data, 
-                inputs=["sales_train_data", "stores_info"], 
-                outputs="aggregated_sales_data", 
-                name="aggegate_sales_data",
-                ),
+            # Node(   
+            #     aggegate_sales_data, 
+            #     inputs=["sales_train_data", "stores_info"], 
+            #     outputs="aggregated_sales_data", 
+            #     name="aggegate_sales_data",
+            #     ),
             Node(
                 feature_engineering,
-                inputs="aggregated_sales_data",
+                inputs="sales_train_data",
                 outputs="feature_engineered_sales_data",
                 name="feature_engineering",
                 ),
