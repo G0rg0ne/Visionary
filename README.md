@@ -13,7 +13,7 @@ During development, we visualize our data pipelines using **Kedro Viz**, which p
 
 Below is a screenshot of the Kedro Viz output for this project:
 
-![Kedro Viz Pipeline Visualization](assets/image.png)
+![Kedro Viz Pipeline Visualization](assets/kedro-pipeline.png)
 
 *Kedro Viz* helps showcase the data flow, node outputs, and dependencies at each stage of the pipeline, facilitating rapid iteration and improving clarity during the development process.
 
