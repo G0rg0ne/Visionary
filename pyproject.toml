@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 requires-python = ">=3.10"
-name = "visioanry"
+name = "visionary"
 readme = "README.md"
 dynamic = [
     "version",
@@ -20,10 +20,12 @@ dependencies = [
     "kedro-datasets>=9.0.0",
     "kedro-viz>=12.2.0",
     "prophet>=1.2.1",
+    "loguru>=0.7.3",
+    "scikit-learn>=1.7.2",
 ]
 
 [project.scripts]
-visioanry = "visioanry.__main__:main"
+visionary = "visionary.__main__:main"
 
 [project.entry-points."kedro.hooks"]
 
@@ -36,7 +38,7 @@ dev = [
 ]
 
 [tool.setuptools.dynamic.version]
-attr = "visioanry.__version__"
+attr = "visionary.__version__"
 
 [tool.setuptools.packages.find]
 where = [
@@ -45,8 +47,8 @@ where = [
 namespaces = false
 
 [tool.kedro]
-package_name = "visioanry"
-project_name = "Visioanry"
+package_name = "visionary"
+project_name = "visionary"
 kedro_init_version = "1.1.1"
 tools = "['Linting', 'Data Structure']"
 example_pipeline = "False"
