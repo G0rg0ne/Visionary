@@ -2,6 +2,8 @@
 #
 # Documentation for this file format can be found in "The Data Catalog"
 # Link: https://docs.kedro.org/en/stable/data/data_catalog.html
+
+########################################## DATA INGESTION ##########################################
 sales_train_data:
   type: pandas.CSVDataset
   filepath: data/01_raw/train.csv
@@ -13,8 +15,8 @@ sales_test_data:
 stores_info:
   type: pandas.CSVDataset
   filepath: data/01_raw/store.csv
-
-# This is a HTML report of the sales data plot
+  
+########################################## DATA VISUALIZATION ##########################################
 sales_graph_html:
   type: kedro_datasets.text.TextDataset
   filepath: data/08_reporting/sales_graph.html
@@ -27,10 +29,21 @@ correlation_matrix_html:
   type: kedro_datasets.text.TextDataset
   filepath: data/08_reporting/correlation_matrix.html
 
-feature_engineered_sales_data:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/feature_engineered_sales_data.csv
-
 store_stats_graph_html:
   type: kedro_datasets.text.TextDataset
   filepath: data/08_reporting/store_stats_graph.html
+
+########################################## FEATURE ENGINEERING ##########################################
+
+df_prophet:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/df_prophet.csv
+
+future:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/future.csv
+
+store_holidays:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/store_holidays.csv
+
