@@ -47,3 +47,7 @@ store_holidays:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/store_holidays.csv
 
+########################################## MODEL TRAINING ##########################################
+prophet_model:
+  type: visionary.datasets.prophet_model.ProphetModelDataset
+  filepath: data/06_models/prophet_model.joblib
