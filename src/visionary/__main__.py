@@ -1,5 +1,5 @@
-"""Visioanry file for ensuring the package is executable
-as `visioanry` and `python -m visioanry`
+"""visionary file for ensuring the package is executable
+as `visionary` and `python -m visionary`
 """
 import sys
 from pathlib import Path
