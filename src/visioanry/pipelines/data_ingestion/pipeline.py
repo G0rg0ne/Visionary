@@ -8,6 +8,7 @@ from .nodes import (
     plot_sales_data,
     plot_top_10_stores_by_total_sales,
     correlation_matrix,
+    compute_stats_for_store,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -29,4 +30,9 @@ def create_pipeline(**kwargs) -> Pipeline:
             inputs="sales_train_data",
             outputs="correlation_matrix_html",
             name="correlation_matrix"),
+        Node(
+            compute_stats_for_store,
+            inputs="sales_train_data",
+            outputs="store_stats_graph_html",
+            name="compute_stats_for_store"),
     ])

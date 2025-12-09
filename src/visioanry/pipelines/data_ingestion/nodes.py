@@ -54,3 +54,12 @@ def correlation_matrix(sales_data: pd.DataFrame) -> str:
     correlation_matrix = correlation_data.corr()
     fig_correlation_matrix = px.imshow(correlation_matrix, title='Correlation Matrix')
     return fig_correlation_matrix.to_html(full_html=False)
+
+
+def compute_stats_for_store(sales_data: pd.DataFrame) -> pd.DataFrame:
+    #compute how many datapoint we have for each store
+    store_stats = sales_data.groupby('Store')['Sales'].count().reset_index()
+    store_stats.columns = ['Store', 'DataPoints']
+    #plot it using plotly
+    fig_store_stats = px.bar(store_stats, x='Store', y='DataPoints', title='Data Points per Store')
+    return fig_store_stats.to_html(full_html=False)
