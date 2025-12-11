@@ -6,17 +6,17 @@ generated using Kedro 1.1.1
 import pandas as pd
 import numpy as np
 from prophet import Prophet
-from prophet.diagnostics import cross_validation, performance_metrics
 from loguru import logger
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from typing import Dict, Tuple, Any
 import mlflow
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
 import os
 
 def train_model(df_prophet: pd.DataFrame, store_holidays: pd.DataFrame, 
-                mlflow_experiment_name: str, mlflow_run_name: str):
+                mlflow_experiment_name: str, mlflow_run_name: str, model_training_parameters: Dict[str, Any], store_id_to_train: int):
     """
     Train a Prophet model.
     Assumes data is clean and ready for training.
@@ -26,6 +26,7 @@ def train_model(df_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
         store_holidays: Holiday dataframe
         mlflow_experiment_name: Name of the MLflow experiment
         mlflow_run_name: Name of the MLflow run
+        model_param: Dictionary of Prophet model parameters
     
     Returns:
         Trained Prophet model
@@ -36,17 +37,17 @@ def train_model(df_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
     
     # Set MLflow experiment and run
     mlflow.set_experiment(mlflow_experiment_name)
-    mlflow.start_run(run_name=mlflow_run_name)
+    mlflow.start_run(run_name=f"{mlflow_run_name}_store_{str(store_id_to_train)}")
     logger.info(f"MLflow experiment: {mlflow_experiment_name}")
-    logger.info(f"MLflow run: {mlflow_run_name}")
+    logger.info(f"MLflow run: {mlflow_run_name}_store_{str(store_id_to_train)}")
     
     # Initialize and configure model
     m = Prophet(
         holidays=store_holidays,
-        yearly_seasonality=True,
-        weekly_seasonality=True,
-        daily_seasonality=False,
-        interval_width=0.95
+        yearly_seasonality=model_training_parameters['yearly_seasonality'],
+        weekly_seasonality=model_training_parameters['weekly_seasonality'],
+        daily_seasonality=model_training_parameters['daily_seasonality'],
+        interval_width=model_training_parameters['interval_width']
     )
     
     # Add regressors if they exist in the data
@@ -63,18 +64,30 @@ def train_model(df_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
     
     # Log model parameters to MLflow
     mlflow.log_params({
-        'yearly_seasonality': True,
-        'weekly_seasonality': True,
-        'daily_seasonality': False,
-        'interval_width': 0.95,
+        'yearly_seasonality': model_training_parameters['yearly_seasonality'],
+        'weekly_seasonality': model_training_parameters['weekly_seasonality'],
+        'daily_seasonality': model_training_parameters['daily_seasonality'],
+        'interval_width': model_training_parameters['interval_width'],
         'regressors': ','.join(regressors) if regressors else 'none',
-        'has_holidays': len(store_holidays) > 0 if store_holidays is not None else False
+        'has_holidays': True if store_holidays is not None else False
     })
     
     # Train the model
     logger.info("Fitting model...")
     m.fit(df_prophet)
     logger.info("✓ Model training completed successfully")
+    
+    # Log training time series as artifact
+    logger.info("Creating training time series visualization...")
+    plot_training_time_series(df_prophet, m)
+    logger.info("✓ Training time series logged to MLflow as artifact")
+    
+    # Log raw training data as CSV artifact
+    training_data_file = "training_data.csv"
+    df_prophet.to_csv(training_data_file, index=False)
+    mlflow.log_artifact(training_data_file)
+    logger.info("✓ Training data CSV logged to MLflow as artifact")
+    os.remove(training_data_file)
     
     # Log model to MLflow
     mlflow.prophet.log_model(m, "prophet_model")
@@ -186,8 +199,69 @@ def analyze_model_components(model: Prophet, df_prophet: pd.DataFrame):
             logger.info(f"    Mean: {reg_mean:.2f}")
 
 
+def plot_training_time_series(df_prophet: pd.DataFrame, model: Prophet):
+    """
+    Create a visualization of the training time series data (target value vs time)
+    with the extracted trend line overlaid on top.
+    Saves the figure as a PNG image and logs it to MLflow as an artifact.
+    
+    Args:
+        df_prophet: Training data in Prophet format (ds, y, and regressors)
+        model: Trained Prophet model
+    """
+    # Prepare data - only plot target (y) vs time (ds)
+    dates = pd.to_datetime(df_prophet['ds'])
+    y_values = df_prophet['y']
+    
+    # Get trend component from the model
+    forecast = model.predict(df_prophet.drop(columns=['y']))
+    trend_values = forecast['trend']
+    yearly_seasonality_values = forecast['yearly']
+    weekly_seasonality_values = forecast['weekly']
+    
+    # Create matplotlib figure
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Plot the training time series
+    ax.plot(dates, y_values, linewidth=1.5, color='blue', marker='o', markersize=1, 
+            alpha=0.6, label='Training Sales')
+    
+    # Plot the trend line on top
+    ax.plot(dates, trend_values, linewidth=2.5, color='red', linestyle='--', 
+            label='Trend', alpha=0.9)
+    ax.plot(dates, yearly_seasonality_values, linewidth=1, color='green', linestyle='-', 
+            label='Yearly Seasonality', alpha=0.5)
+    ax.plot(dates, weekly_seasonality_values, linewidth=1, color='yellow', linestyle='-', 
+            label='Weekly Seasonality', alpha=0.5)
+    
+    # Formatting
+    ax.set_xlabel('Date', fontsize=12)
+    ax.set_ylabel('Sales', fontsize=12)
+    ax.set_title('Training Time Series Data with Trend Line', fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=10, loc='best')
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    
+    # Save figure as PNG image
+    training_ts_file = "training_time_series.png"
+    fig.savefig(training_ts_file, dpi=300, bbox_inches='tight')
+    plt.close(fig)  # Close figure to free memory
+    
+    # Log image to MLflow
+    mlflow.log_artifact(training_ts_file)
+    logger.info("Training time series image with trend line logged to MLflow as artifact")
+    
+    # Clean up file
+    os.remove(training_ts_file)
+
+
 def plot_forecast_results(future: pd.DataFrame, forecast: pd.DataFrame, 
-                          metrics: Dict[str, float]):
+):
     """
     Create a visualization of forecasted vs actual values.
     Saves the figure as an HTML file and logs it to MLflow as an artifact.
@@ -355,7 +429,7 @@ def evaluate_model(model: Prophet, future: pd.DataFrame):
     
     # Create forecast visualization and log to MLflow
     logger.info("Creating forecast visualization...")
-    plot_forecast_results(future, forecast, metrics)
+    plot_forecast_results(future, forecast)
     logger.info("✓ Forecast graph created and logged to MLflow")
     
     # End MLflow run
