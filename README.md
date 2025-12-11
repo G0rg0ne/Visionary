@@ -17,6 +17,37 @@ Below is a screenshot of the Kedro Viz output for this project:
 
 *Kedro Viz* helps showcase the data flow, node outputs, and dependencies at each stage of the pipeline, facilitating rapid iteration and improving clarity during the development process.
 
+## MLflow Integration
+
+This project uses **MLflow** for experiment tracking, model versioning, and artifact management. MLflow automatically logs:
+
+- **Model parameters**: Prophet model configuration and hyperparameters
+- **Metrics**: Evaluation metrics including RMSE, MAE, R², and MAPE on the test set
+- **Artifacts**: Forecast visualization graphs showing predicted vs actual values
+- **Models**: Trained Prophet models for versioning and deployment
+
+### Forecast Visualization
+
+The MLflow artifact graph displays the model's predictions on the test set, comparing actual sales values with predicted values. The visualization includes:
+
+- **Forecast vs Actual Sales**: A comparison plot showing actual sales (blue) and predicted sales (red) with confidence intervals
+- **Residuals Plot**: Analysis of prediction errors over time
+
+Below is a screenshot of the MLflow artifact graph showing the predicted values in the test set:
+
+![MLflow Forecast Graph](assets/newplot.png)
+
+*The forecast graph visualizes the model's performance on the test set, helping to assess prediction accuracy and identify patterns in residuals.*
+
+### Accessing MLflow UI
+
+To view MLflow experiments and artifacts, start the MLflow UI:
+
+```
+mlflow ui
+```
+
+Then navigate to `http://localhost:5000` in your browser to explore experiments, compare runs, and view artifacts.
 
 ## Rules and guidelines
 
