@@ -53,7 +53,7 @@ def split_data_dates(sales_data: pd.DataFrame, split_date: str) -> pd.DataFrame:
     return sales_data_training, sales_data_testing
 
 
-def feature_engineering(sales_data: pd.DataFrame) -> pd.DataFrame:
+def feature_engineering(sales_data: pd.DataFrame, store_id_to_train: int, split_date: str) -> pd.DataFrame:
     """
     Perform feature engineering on the aggregated sales data.
 
@@ -63,8 +63,6 @@ def feature_engineering(sales_data: pd.DataFrame) -> pd.DataFrame:
     
     store_holidays = extract_holidays(sales_data)
 
-    store_id_to_train = 262
-    split_date = '2015-06-19'
     #filter data for the store id to train
     sales_data = sales_data[sales_data['Open'] == 1].copy()
     sales_data = sales_data.drop(columns=['Customers'])
