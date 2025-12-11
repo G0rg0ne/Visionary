@@ -15,7 +15,14 @@ def create_pipeline(**kwargs) -> Pipeline:
     return Pipeline([
         Node(
             train_model,
-            inputs=["df_prophet", "store_holidays", "params:mlflow_experiment_name", "params:mlflow_run_name"],
+            inputs=[
+                "df_prophet",
+                "store_holidays",
+                "params:mlflow_experiment_name",
+                "params:mlflow_run_name",
+                "params:model_training_parameters",
+                "params:store_id_to_train",
+            ],
             name="train_model",
             outputs="prophet_model",
         ),
