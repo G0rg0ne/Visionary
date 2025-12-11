@@ -160,5 +160,6 @@ venv.bak/
 
 # mlflow local runs
 mlruns/*
+mlflow.db
 
 /brainstorming_doc/*
