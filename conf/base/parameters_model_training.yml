@@ -3,3 +3,6 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
+
+mlflow_experiment_name: "prophet_forecasting_experiment"
+mlflow_run_name: "prophet_model_run_v1"
