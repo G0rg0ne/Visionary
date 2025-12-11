@@ -21,7 +21,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             #     ),
             Node(
                 feature_engineering,
-                inputs="sales_train_data",
+                inputs=["sales_train_data","params:store_id_to_train","params:split_date"],
                 outputs=["df_prophet", "future", "store_holidays"],
                 name="feature_engineering",
                 ),
