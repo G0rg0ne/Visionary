@@ -15,7 +15,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return Pipeline([
         Node(
             train_model,
-            inputs=["df_prophet", "store_holidays"],
+            inputs=["df_prophet", "store_holidays", "params:mlflow_experiment_name", "params:mlflow_run_name"],
             name="train_model",
             outputs="prophet_model",
         ),
@@ -29,6 +29,6 @@ def create_pipeline(**kwargs) -> Pipeline:
             evaluate_model,
             inputs=["prophet_model", "future"],
             name="evaluate_model",
-            outputs=None,  # Metrics are logged, not saved
+            outputs=None,
         )
     ])
