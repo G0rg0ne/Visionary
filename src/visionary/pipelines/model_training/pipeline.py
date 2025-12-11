@@ -7,7 +7,8 @@ from kedro.pipeline import Node, Pipeline  # noqa
 
 from .nodes import (
     train_model, 
-    evaluate_model
+    evaluate_model,
+    analyze_model_components,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -19,9 +20,15 @@ def create_pipeline(**kwargs) -> Pipeline:
             outputs="prophet_model",
         ),
         Node(
+            analyze_model_components,
+            inputs=["prophet_model", "df_prophet"],
+            name="analyze_model_components",
+            outputs=None,
+        ),
+        Node(
             evaluate_model,
             inputs=["prophet_model", "future"],
             name="evaluate_model",
-            outputs=None,
+            outputs=None,  # Metrics are logged, not saved
         )
     ])
