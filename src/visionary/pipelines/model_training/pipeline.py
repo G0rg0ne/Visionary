@@ -7,8 +7,6 @@ from kedro.pipeline import Node, Pipeline  # noqa
 
 from .nodes import (
     train_model, 
-    evaluate_model,
-    analyze_model_components,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -16,26 +14,14 @@ def create_pipeline(**kwargs) -> Pipeline:
         Node(
             train_model,
             inputs=[
-                "df_prophet",
+                "df_train_prophet",
                 "store_holidays",
+                "future_evaluation",
                 "params:mlflow_experiment_name",
                 "params:mlflow_run_name",
                 "params:model_training_parameters",
-                "params:store_id_to_train",
             ],
             name="train_model",
-            outputs="prophet_model",
+            outputs="prophet_models",
         ),
-        Node(
-            analyze_model_components,
-            inputs=["prophet_model", "df_prophet"],
-            name="analyze_model_components",
-            outputs=None,
-        ),
-        Node(
-            evaluate_model,
-            inputs=["prophet_model", "future"],
-            name="evaluate_model",
-            outputs=None,
-        )
     ])
