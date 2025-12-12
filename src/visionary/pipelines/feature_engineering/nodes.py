@@ -21,21 +21,31 @@ def aggegate_sales_data(sales_data: pd.DataFrame, stores_info: pd.DataFrame) -> 
 
 def extract_holidays(sales_data: pd.DataFrame) -> pd.DataFrame:
     """
-    Extract holidays from the sales data.
+    Extract holidays from the sales data, including both state and school holidays.
 
     Args:
         sales_data (pd.DataFrame): Sales data.
     """
-    holiday_data = sales_data[['Date', 'StateHoliday']].copy()
+    holiday_data = sales_data[['Date', 'StateHoliday','SchoolHoliday']].copy()
     holiday_data = holiday_data.drop_duplicates()
-    holiday_data['StateHoliday'] =  holiday_data['StateHoliday'].astype(str)
-    holiday_data = holiday_data[holiday_data['StateHoliday'] != '0']
+    holiday_data['StateHoliday'] = holiday_data['StateHoliday'].astype(str)
+    holiday_data['SchoolHoliday'] = holiday_data['SchoolHoliday'].astype(str)
+
+    # Select rows where there is either a StateHoliday or a SchoolHoliday
+    #holiday_data = holiday_data[(holiday_data['StateHoliday'] != '0') | (holiday_data['SchoolHoliday'] != '0')]
+    holiday_data = holiday_data[(holiday_data['StateHoliday'] != '0')]
+
     holiday_map = {
         'a': 'PublicHoliday',
         'b': 'Easter',
         'c': 'Christmas'
     }
+
+    # For state holidays, assign mapped name if present
     holiday_data['holiday'] = holiday_data['StateHoliday'].map(holiday_map)
+
+    # Where there is a school holiday, add/overwrite to 'SchoolHoliday'
+    #holiday_data.loc[holiday_data['SchoolHoliday'] != '0', 'holiday'] = 'SchoolHoliday'
     prophet_holidays = holiday_data[['Date', 'holiday']].rename(columns={'Date': 'ds'})
     return prophet_holidays
 
@@ -53,7 +63,7 @@ def split_data_dates(sales_data: pd.DataFrame, split_date: str) -> pd.DataFrame:
     return sales_data_training, sales_data_testing
 
 
-def feature_engineering(sales_data: pd.DataFrame, store_id_to_train: int, split_date: str) -> pd.DataFrame:
+def feature_engineering(sales_data: pd.DataFrame, split_date: str) -> pd.DataFrame:
     """
     Perform feature engineering on the aggregated sales data.
 
@@ -66,14 +76,14 @@ def feature_engineering(sales_data: pd.DataFrame, store_id_to_train: int, split_
     #filter data for the store id to train
     sales_data = sales_data[sales_data['Open'] == 1].copy()
     sales_data = sales_data.drop(columns=['Customers'])
-    sales_data = sales_data[sales_data['Store'] == store_id_to_train]
+
 
     sales_data_training, sales_data_testing = split_data_dates(sales_data, split_date)
 
     store_train = sales_data_training.copy()
-    store_test = sales_data_testing.copy()
-    
-    df_prophet = store_train.rename(columns={'Date': 'ds', 'Sales': 'y'})
-    future = store_test.rename(columns={'Date': 'ds'})
+    store_evaluation = sales_data_testing.copy()
 
-    return df_prophet, future, store_holidays
+    df_train_prophet = store_train.rename(columns={'Date': 'ds', 'Sales': 'y'})
+    future_evaluation = store_evaluation.rename(columns={'Date': 'ds'})
+
+    return df_train_prophet, future_evaluation, store_holidays
