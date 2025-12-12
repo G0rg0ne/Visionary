@@ -12,3 +12,7 @@ model_training_parameters:
   weekly_seasonality: true
   daily_seasonality: false
   interval_width: 0.95
+  regressors:
+    - Promo
+    - Open
+    - SchoolHoliday

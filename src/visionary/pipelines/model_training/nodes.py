@@ -43,7 +43,7 @@ def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
     available_stores = df_train_prophet['Store'].unique()
     logger.info(f"Training models for {len(available_stores)} stores")
     prophet_models = []
-    regressors = ['Promo','Open','SchoolHoliday']
+    regressors = model_training_parameters['regressors']
     
     # Start parent run for overall training process
     with mlflow.start_run(run_name=mlflow_run_name):
