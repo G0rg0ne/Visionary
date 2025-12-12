@@ -95,10 +95,26 @@ def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
                     prophet_model.fit(df_train_prophet_store)
                     prophet_models.append(prophet_model)
                     logger.info(f"Trained model for store: {store}")
-                    #Evaluate model on Evalueation data set
-                    metrics = evaluate_model(prophet_model, future_evaluation[future_evaluation['Store'] == store])
-                    mlflow.log_metrics(metrics)
-                    logger.info(f"Logged metrics for store: {store}")
+                    
+                    # Evaluate model on evaluation data set
+                    # Filter evaluation data for this store and handle index alignment
+                    future_eval_store = future_evaluation.loc[future_evaluation['Store'] == store].copy()
+                    
+                    if future_eval_store.empty:
+                        logger.warning(f"Store {store} has no evaluation data, skipping metrics")
+                    else:
+                        # Ensure the dataframe has required columns for Prophet
+                        future_eval_prophet = future_eval_store.copy()
+                        # Prophet expects 'ds' column (already renamed in feature engineering)
+                        # and needs regressors if they were used
+                        metrics = evaluate_model(prophet_model, future_eval_prophet)
+                        # Filter out NaN metrics before logging
+                        valid_metrics = {k: float(v) for k, v in metrics.items() if not np.isnan(v)}
+                        if valid_metrics:
+                            mlflow.log_metrics(valid_metrics)
+                            logger.info(f"Logged metrics for store: {store}")
+                        else:
+                            logger.warning(f"No valid metrics to log for store: {store}")
 
                     mlflow.prophet.log_model(prophet_model, name=f"prophet_model_store_{store}")
                     
@@ -176,22 +192,49 @@ def evaluate_model(model: Prophet, future: pd.DataFrame) -> Dict[str, float]:
     
     Args:
         model: Trained Prophet model
-        future: Test data with 'ds' and 'Sales' columns
+        future: Test data with 'ds' and 'Sales' columns, and optional regressors
+    
+    Returns:
+        Dictionary of evaluation metrics
     """
-    logger.info("=" * 50)
-    logger.info("EVALUATING ON TEST DATA")
-    logger.info("=" * 50)
+    # Validate required columns
+    if 'ds' not in future.columns:
+        raise ValueError("Future dataframe must have 'ds' column")
+    if 'Sales' not in future.columns:
+        raise ValueError("Future dataframe must have 'Sales' column")
+    
+    # Prepare data for prediction - keep only 'ds' and regressors
+    # Prophet will ignore other columns, but it's cleaner to only pass what's needed
+    prediction_data = future[['ds']].copy()
+    
+    # Add regressors if they exist in the future dataframe
+    # Check which regressors the model expects by looking at what was added during training
+    # For now, we'll include common regressors if they exist
+    regressor_cols = ['Promo', 'Open', 'SchoolHoliday']
+    for reg in regressor_cols:
+        if reg in future.columns:
+            prediction_data[reg] = future[reg]
     
     # Make predictions
-    y_true = future['Sales']
-    forecast = model.predict(future.drop(columns=['Sales']))
-    y_pred = forecast['yhat']
+    y_true = future['Sales'].values
+    forecast = model.predict(prediction_data)
+    y_pred = forecast['yhat'].values
+    
+    # Ensure y_true and y_pred have the same length
+    if len(y_true) != len(y_pred):
+        min_len = min(len(y_true), len(y_pred))
+        y_true = y_true[:min_len]
+        y_pred = y_pred[:min_len]
+        logger.warning(f"Mismatch in lengths, using first {min_len} values")
     
     # Calculate metrics
-    metrics = calculate_metrics(y_true, y_pred)
+    metrics = calculate_metrics(pd.Series(y_true), pd.Series(y_pred))
     
     logger.info("\nTest Metrics:")
     for metric_name, metric_value in metrics.items():
-        logger.info(f"  {metric_name}: {metric_value:.4f}")
+        if not np.isnan(metric_value):
+            logger.info(f"  {metric_name}: {metric_value:.4f}")
+        else:
+            logger.info(f"  {metric_name}: N/A")
     
     return metrics
