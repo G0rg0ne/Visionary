@@ -163,3 +163,5 @@ mlruns/*
 mlflow.db
 
 /brainstorming_doc/*
+
+CLAUDE.md
