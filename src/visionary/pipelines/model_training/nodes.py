@@ -29,7 +29,7 @@ def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
         model_training_parameters: Dictionary of Prophet model parameters
     
     Returns:
-        List of trained Prophet models (one per store)
+        Dictionary of trained Prophet models keyed by store ID (e.g., {"store_1": model1, "store_2": model2})
     """
     # Data validation
     if df_train_prophet.empty:
@@ -42,7 +42,7 @@ def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
     logger.info("=" * 50)
     available_stores = df_train_prophet['Store'].unique()
     logger.info(f"Training models for {len(available_stores)} stores")
-    prophet_models = []
+    prophet_models = {}
     regressors = model_training_parameters['regressors']
     
     # Start parent run for overall training process
@@ -93,7 +93,7 @@ def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame,
                             logger.info(f"Regressor {regressor} not found in data")
                     
                     prophet_model.fit(df_train_prophet_store)
-                    prophet_models.append(prophet_model)
+                    prophet_models[f"store_{store}"] = prophet_model
                     logger.info(f"Trained model for store: {store}")
                     
                     # Evaluate model on evaluation data set
