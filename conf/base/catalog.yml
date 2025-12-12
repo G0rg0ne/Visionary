@@ -35,11 +35,11 @@ store_stats_graph_html:
 
 ########################################## FEATURE ENGINEERING ##########################################
 
-df_prophet:
+df_train_prophet:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/df_prophet.csv
 
-future:
+future_evaluation:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/future.csv
 
@@ -48,6 +48,8 @@ store_holidays:
   filepath: data/02_intermediate/store_holidays.csv
 
 ########################################## MODEL TRAINING ##########################################
-prophet_model:
-  type: visionary.datasets.prophet_model.ProphetModelDataset
-  filepath: data/06_models/prophet_model.joblib
+prophet_models:
+  type: partitions.PartitionedDataset
+  dataset: visionary.datasets.prophet_model.ProphetModelDataset
+  path: data/06_models/ProphetModels/
+  filename_suffix: .joblib
