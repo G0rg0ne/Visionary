@@ -15,84 +15,112 @@ from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
 import os
 
-def train_model(df_prophet: pd.DataFrame, store_holidays: pd.DataFrame, 
-                mlflow_experiment_name: str, mlflow_run_name: str, model_training_parameters: Dict[str, Any], store_id_to_train: int):
+def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame, 
+                future_evaluation: pd.DataFrame, mlflow_experiment_name: str, mlflow_run_name: str, model_training_parameters: Dict[str, Any]):
     """
-    Train a Prophet model.
+    Train Prophet models for each store.
     Assumes data is clean and ready for training.
     
     Args:
-        df_prophet: Training data in Prophet format (ds, y, and regressors)
-        store_holidays: Holiday dataframe
+        df_train_prophet: Training data with 'Store', 'Date', 'Sales' columns and optional regressors
+        store_holidays: Holiday dataframe in Prophet format (ds, holiday columns)
         mlflow_experiment_name: Name of the MLflow experiment
         mlflow_run_name: Name of the MLflow run
-        model_param: Dictionary of Prophet model parameters
+        model_training_parameters: Dictionary of Prophet model parameters
     
     Returns:
-        Trained Prophet model
+        List of trained Prophet models (one per store)
     """
+    # Data validation
+    if df_train_prophet.empty:
+        raise ValueError("Training dataframe is empty")
+    
+    mlflow.set_experiment(mlflow_experiment_name)
+    logger.info(f"MLflow experiment: {mlflow_experiment_name}")
     logger.info("=" * 50)
     logger.info("TRAINING PROPHET MODEL")
     logger.info("=" * 50)
+    available_stores = df_train_prophet['Store'].unique()
+    logger.info(f"Training models for {len(available_stores)} stores")
+    prophet_models = []
+    regressors = ['Promo','Open','SchoolHoliday']
     
-    # Set MLflow experiment and run
-    mlflow.set_experiment(mlflow_experiment_name)
-    mlflow.start_run(run_name=f"{mlflow_run_name}_store_{str(store_id_to_train)}")
-    logger.info(f"MLflow experiment: {mlflow_experiment_name}")
-    logger.info(f"MLflow run: {mlflow_run_name}_store_{str(store_id_to_train)}")
+    # Start parent run for overall training process
+    with mlflow.start_run(run_name=mlflow_run_name):
+        logger.info(f"MLflow parent run: {mlflow_run_name}")
+        
+        # Log parent-level parameters
+        mlflow.log_params({
+            'total_stores': len(available_stores),
+            'yearly_seasonality': model_training_parameters['yearly_seasonality'],
+            'weekly_seasonality': model_training_parameters['weekly_seasonality'],
+            'daily_seasonality': model_training_parameters['daily_seasonality'],
+            'interval_width': model_training_parameters['interval_width'],
+            'has_holidays': True if store_holidays is not None and not store_holidays.empty else False,
+            'regressor_list': ','.join(regressors)
+        })
+        
+        # Train models for each store as nested (child) runs
+        for store in available_stores:
+            try:
+                df_train_prophet_store = df_train_prophet[df_train_prophet['Store'] == store].copy()
+                
+                # Validate store-specific data
+                if df_train_prophet_store.empty:
+                    logger.warning(f"Store {store} has no data, skipping")
+                    continue
+                
+                # Create nested (child) run for this store
+                with mlflow.start_run(run_name=f"store_{store}", nested=True):
+                    logger.info(f"MLflow nested run: store_{store}")
+                    
+                    prophet_model = Prophet(
+                        holidays=store_holidays,
+                        yearly_seasonality=model_training_parameters['yearly_seasonality'],
+                        weekly_seasonality=model_training_parameters['weekly_seasonality'],
+                        daily_seasonality=model_training_parameters['daily_seasonality'],
+                        interval_width=model_training_parameters['interval_width']
+                    )
+                    
+                    # Track which regressors were actually added
+                    added_regressors = []
+                    for regressor in regressors:
+                        if regressor in df_train_prophet_store.columns:
+                            prophet_model.add_regressor(regressor)
+                            added_regressors.append(regressor)
+                            logger.info(f"Added regressor: {regressor}")
+                        else:
+                            logger.info(f"Regressor {regressor} not found in data")
+                    
+                    prophet_model.fit(df_train_prophet_store)
+                    prophet_models.append(prophet_model)
+                    logger.info(f"Trained model for store: {store}")
+                    #Evaluate model on Evalueation data set
+                    metrics = evaluate_model(prophet_model, future_evaluation[future_evaluation['Store'] == store])
+                    mlflow.log_metrics(metrics)
+                    logger.info(f"Logged metrics for store: {store}")
+
+                    mlflow.prophet.log_model(prophet_model, name=f"prophet_model_store_{store}")
+                    
+                    logger.info(f"Logged model for store: {store}")
+            
+            except Exception as e:
+                logger.error(f"Error training model for store {store}: {str(e)}")
+                # Nested run will be automatically closed by context manager
+                # Continue with next store instead of raising
+                continue
+        
+        # Log summary metrics to parent run
+        if prophet_models:
+            mlflow.log_metric('successful_models', len(prophet_models))
+            mlflow.log_metric('failed_models', len(available_stores) - len(prophet_models))
+            logger.info(f"Parent run completed: {len(prophet_models)}/{len(available_stores)} models trained successfully")
     
-    # Initialize and configure model
-    m = Prophet(
-        holidays=store_holidays,
-        yearly_seasonality=model_training_parameters['yearly_seasonality'],
-        weekly_seasonality=model_training_parameters['weekly_seasonality'],
-        daily_seasonality=model_training_parameters['daily_seasonality'],
-        interval_width=model_training_parameters['interval_width']
-    )
+    if not prophet_models:
+        raise ValueError("No models were successfully trained")
     
-    # Add regressors if they exist in the data
-    regressors = []
-    if 'Promo' in df_prophet.columns:
-        m.add_regressor('Promo')
-        regressors.append('Promo')
-        logger.info("Added regressor: Promo")
-    
-    if 'SchoolHoliday' in df_prophet.columns:
-        m.add_regressor('SchoolHoliday')
-        regressors.append('SchoolHoliday')
-        logger.info("Added regressor: SchoolHoliday")
-    
-    # Log model parameters to MLflow
-    mlflow.log_params({
-        'yearly_seasonality': model_training_parameters['yearly_seasonality'],
-        'weekly_seasonality': model_training_parameters['weekly_seasonality'],
-        'daily_seasonality': model_training_parameters['daily_seasonality'],
-        'interval_width': model_training_parameters['interval_width'],
-        'regressors': ','.join(regressors) if regressors else 'none',
-        'has_holidays': True if store_holidays is not None else False
-    })
-    
-    # Train the model
-    logger.info("Fitting model...")
-    m.fit(df_prophet)
-    logger.info("✓ Model training completed successfully")
-    
-    # Log training time series as artifact
-    logger.info("Creating training time series visualization...")
-    plot_training_time_series(df_prophet, m)
-    logger.info("✓ Training time series logged to MLflow as artifact")
-    
-    # Log raw training data as CSV artifact
-    training_data_file = "training_data.csv"
-    df_prophet.to_csv(training_data_file, index=False)
-    mlflow.log_artifact(training_data_file)
-    logger.info("✓ Training data CSV logged to MLflow as artifact")
-    os.remove(training_data_file)
-    
-    # Log model to MLflow
-    mlflow.prophet.log_model(m, "prophet_model")
-    
-    return m
+    logger.info(f"Successfully trained {len(prophet_models)} models")
+    return prophet_models
 
 
 def calculate_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, float]:
@@ -141,259 +169,7 @@ def calculate_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, float]:
         'MASE': mase
     }
 
-
-def analyze_model_components(model: Prophet, df_prophet: pd.DataFrame):
-    """
-    Analyze and log model components (trend, seasonality, regressors).
-    
-    Args:
-        model: Trained Prophet model
-        df_prophet: Training data
-    """
-    logger.info("=" * 50)
-    logger.info("MODEL COMPONENT ANALYSIS")
-    logger.info("=" * 50)
-    
-    # Get forecast to analyze components
-    forecast = model.predict(df_prophet.drop(columns=['y']))
-    
-    # Analyze trend
-    trend_change = forecast['trend'].iloc[-1] - forecast['trend'].iloc[0]
-    trend_pct_change = (trend_change / forecast['trend'].iloc[0]) * 100 if forecast['trend'].iloc[0] != 0 else 0
-    
-    logger.info("Trend Analysis:")
-    logger.info(f"  Initial trend: {forecast['trend'].iloc[0]:.2f}")
-    logger.info(f"  Final trend: {forecast['trend'].iloc[-1]:.2f}")
-    logger.info(f"  Change: {trend_change:.2f} ({trend_pct_change:.2f}%)")
-    
-    # Analyze seasonality components
-    if 'yearly' in forecast.columns:
-        yearly_range = forecast['yearly'].max() - forecast['yearly'].min()
-        yearly_mean = forecast['yearly'].mean()
-        logger.info(f"\nYearly Seasonality:")
-        logger.info(f"  Range: {yearly_range:.2f}")
-        logger.info(f"  Mean: {yearly_mean:.2f}")
-    
-    if 'weekly' in forecast.columns:
-        weekly_range = forecast['weekly'].max() - forecast['weekly'].min()
-        weekly_mean = forecast['weekly'].mean()
-        logger.info(f"\nWeekly Seasonality:")
-        logger.info(f"  Range: {weekly_range:.2f}")
-        logger.info(f"  Mean: {weekly_mean:.2f}")
-    
-    # Analyze regressors
-    regressor_cols = [col for col in forecast.columns if col not in 
-                     ['ds', 'yhat', 'yhat_lower', 'yhat_upper', 'trend', 
-                      'yearly', 'weekly', 'daily', 'holidays', 'additive_terms', 
-                      'multiplicative_terms', 'additive_terms_lower', 
-                      'additive_terms_upper', 'multiplicative_terms_lower', 
-                      'multiplicative_terms_upper']]
-    
-    if regressor_cols:
-        logger.info(f"\nRegressor Analysis:")
-        for reg in regressor_cols:
-            reg_range = forecast[reg].max() - forecast[reg].min()
-            reg_mean = forecast[reg].mean()
-            logger.info(f"  {reg}:")
-            logger.info(f"    Range: {reg_range:.2f}")
-            logger.info(f"    Mean: {reg_mean:.2f}")
-
-
-def plot_training_time_series(df_prophet: pd.DataFrame, model: Prophet):
-    """
-    Create a visualization of the training time series data (target value vs time)
-    with the extracted trend line overlaid on top.
-    Saves the figure as a PNG image and logs it to MLflow as an artifact.
-    
-    Args:
-        df_prophet: Training data in Prophet format (ds, y, and regressors)
-        model: Trained Prophet model
-    """
-    # Prepare data - only plot target (y) vs time (ds)
-    dates = pd.to_datetime(df_prophet['ds'])
-    y_values = df_prophet['y']
-    
-    # Get trend component from the model
-    forecast = model.predict(df_prophet.drop(columns=['y']))
-    trend_values = forecast['trend']
-    yearly_seasonality_values = forecast['yearly']
-    weekly_seasonality_values = forecast['weekly']
-    
-    # Create matplotlib figure
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    # Plot the training time series
-    ax.plot(dates, y_values, linewidth=1.5, color='blue', marker='o', markersize=1, 
-            alpha=0.6, label='Training Sales')
-    
-    # Plot the trend line on top
-    ax.plot(dates, trend_values, linewidth=2.5, color='red', linestyle='--', 
-            label='Trend', alpha=0.9)
-    ax.plot(dates, yearly_seasonality_values, linewidth=1, color='green', linestyle='-', 
-            label='Yearly Seasonality', alpha=0.5)
-    ax.plot(dates, weekly_seasonality_values, linewidth=1, color='yellow', linestyle='-', 
-            label='Weekly Seasonality', alpha=0.5)
-    
-    # Formatting
-    ax.set_xlabel('Date', fontsize=12)
-    ax.set_ylabel('Sales', fontsize=12)
-    ax.set_title('Training Time Series Data with Trend Line', fontsize=14, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=10, loc='best')
-    
-    # Rotate x-axis labels for better readability
-    plt.xticks(rotation=45, ha='right')
-    
-    # Adjust layout to prevent label cutoff
-    plt.tight_layout()
-    
-    # Save figure as PNG image
-    training_ts_file = "training_time_series.png"
-    fig.savefig(training_ts_file, dpi=300, bbox_inches='tight')
-    plt.close(fig)  # Close figure to free memory
-    
-    # Log image to MLflow
-    mlflow.log_artifact(training_ts_file)
-    logger.info("Training time series image with trend line logged to MLflow as artifact")
-    
-    # Clean up file
-    os.remove(training_ts_file)
-
-
-def plot_forecast_results(future: pd.DataFrame, forecast: pd.DataFrame, 
-):
-    """
-    Create a visualization of forecasted vs actual values.
-    Saves the figure as an HTML file and logs it to MLflow as an artifact.
-    
-    Args:
-        future: Test data with 'ds' and 'Sales' columns
-        forecast: Prophet forecast dataframe with predictions
-        metrics: Dictionary of evaluation metrics (not displayed in plot)
-    """
-    # Prepare data
-    dates = pd.to_datetime(future['ds'])
-    y_true = future['Sales']
-    y_pred = forecast['yhat']
-    y_lower = forecast['yhat_lower']
-    y_upper = forecast['yhat_upper']
-    
-    # Create figure with subplots
-    fig = make_subplots(
-        rows=2, cols=1,
-        row_heights=[0.7, 0.3],
-        subplot_titles=('Forecast vs Actual Sales', 'Residuals'),
-        vertical_spacing=0.2
-    )
-    
-    # Main forecast plot
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=y_true,
-            mode='lines+markers',
-            name='Actual Sales',
-            line=dict(color='blue', width=2),
-            marker=dict(size=4)
-        ),
-        row=1, col=1
-    )
-    
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=y_pred,
-            mode='lines+markers',
-            name='Predicted Sales',
-            line=dict(color='red', width=2, dash='dash'),
-            marker=dict(size=4)
-        ),
-        row=1, col=1
-    )
-    
-    # Confidence interval
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=y_upper,
-            mode='lines',
-            name='Upper Bound',
-            line=dict(width=0),
-            showlegend=False
-        ),
-        row=1, col=1
-    )
-    
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=y_lower,
-            mode='lines',
-            name='Confidence Interval',
-            fill='tonexty',
-            fillcolor='rgba(255, 0, 0, 0.1)',
-            line=dict(width=0),
-            showlegend=True
-        ),
-        row=1, col=1
-    )
-    
-    # Residuals plot
-    residuals = y_true - y_pred
-    fig.add_trace(
-        go.Scatter(
-            x=dates,
-            y=residuals,
-            mode='lines+markers',
-            name='Residuals',
-            line=dict(color='green', width=1),
-            marker=dict(size=3)
-        ),
-        row=2, col=1
-    )
-    
-    # Add zero line for residuals
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", row=2, col=1)
-    
-    # Update layout with better spacing
-    fig.update_layout(
-        title=dict(
-            text='Forecast Results',
-            x=0.5,
-            xanchor='center',
-            font=dict(size=16)
-        ),
-        height=800,
-        showlegend=True,
-        hovermode='x unified',
-        margin=dict(t=100, b=50, l=50, r=50)
-    )
-    
-    # Update x-axis labels
-    fig.update_xaxes(title_text="Date", row=1, col=1)
-    fig.update_xaxes(title_text="Date", row=2, col=1)
-    
-    # Update y-axis labels
-    fig.update_yaxes(title_text="Sales", row=1, col=1)
-    fig.update_yaxes(title_text="Residuals", row=2, col=1)
-    
-    # Save figure as HTML and log directly to MLflow
-    html_content = fig.to_html(full_html=True)
-    
-    # Write to a file with the desired artifact name
-    forecast_file = "forecast_graph.html"
-    with open(forecast_file, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-    
-    # Log HTML to MLflow - file will be logged with its filename at root level
-    mlflow.log_artifact(forecast_file)
-    logger.info("Forecast graph logged to MLflow as artifact")
-    
-    # Clean up file
-    os.remove(forecast_file)
-
-
-def evaluate_model(model: Prophet, future: pd.DataFrame):
+def evaluate_model(model: Prophet, future: pd.DataFrame) -> Dict[str, float]:
     """
     Evaluate the model on test/validation data with comprehensive metrics.
     Assumes test data is clean and ready for evaluation.
@@ -415,23 +191,7 @@ def evaluate_model(model: Prophet, future: pd.DataFrame):
     metrics = calculate_metrics(y_true, y_pred)
     
     logger.info("\nTest Metrics:")
-    # Prepare metrics for MLflow (only non-NaN values)
-    mlflow_metrics = {}
     for metric_name, metric_value in metrics.items():
-        if not np.isnan(metric_value):
-            logger.info(f"  {metric_name}: {metric_value:.4f}")
-            mlflow_metrics[metric_name] = float(metric_value)
-        else:
-            logger.info(f"  {metric_name}: N/A")
+        logger.info(f"  {metric_name}: {metric_value:.4f}")
     
-    # Log metrics to MLflow
-    mlflow.log_metrics(mlflow_metrics)
-    
-    # Create forecast visualization and log to MLflow
-    logger.info("Creating forecast visualization...")
-    plot_forecast_results(future, forecast)
-    logger.info("✓ Forecast graph created and logged to MLflow")
-    
-    # End MLflow run
-    mlflow.end_run()
-    logger.info("MLflow run completed")
+    return metrics
