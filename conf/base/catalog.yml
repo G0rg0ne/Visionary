@@ -6,8 +6,12 @@
 ########################################## DATA INGESTION ##########################################
 # Raw CSV data loaded from MinIO (dictionary of DataFrames keyed by filename)
 raw_csv_data:
-  type: MemoryDataset
+  type: partitions.PartitionedDataset
+  dataset: pandas.CSVDataset
+  path: data/01_raw/
+  filename_suffix: .csv
 
+#######################################
 sales_train_data:
   type: pandas.CSVDataset
   filepath: data/01_raw/train.csv

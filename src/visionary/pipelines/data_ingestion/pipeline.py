@@ -13,7 +13,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         Node(
             load_csv_files_from_minio_combined,
             inputs=["params:minio_credentials"],
-            outputs=None,
+            outputs="raw_csv_data",
             name="load_csv_files_from_minio"
         ),
     ])

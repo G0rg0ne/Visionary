@@ -224,5 +224,4 @@ def load_csv_files_from_minio_combined(
     
     # Load CSV files
     data = load_csv_files_from_minio(minio_client, minio_credentials)
-    import pdb; pdb.set_trace()
-    return None
+    return data
