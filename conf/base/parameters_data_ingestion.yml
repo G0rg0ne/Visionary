@@ -3,3 +3,11 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
+
+# MinIO Credentials
+# NOTE: In production, these should be in credentials.yml and accessed via context
+minio_credentials:
+  endpoint_url: "http://192.168.1.129:9000"
+  bucket_name: "flight-data"
+  prefix: "prices/"
+  region_name: eu-central-1

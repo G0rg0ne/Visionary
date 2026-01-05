@@ -4,6 +4,10 @@
 # Link: https://docs.kedro.org/en/stable/data/data_catalog.html
 
 ########################################## DATA INGESTION ##########################################
+# Raw CSV data loaded from MinIO (dictionary of DataFrames keyed by filename)
+raw_csv_data:
+  type: MemoryDataset
+
 sales_train_data:
   type: pandas.CSVDataset
   filepath: data/01_raw/train.csv
