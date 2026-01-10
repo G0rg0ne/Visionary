@@ -7,6 +7,7 @@ from kedro.pipeline import Pipeline
 from .pipelines.data_ingestion import pipeline as data_ingestion_pipe
 from .pipelines.feature_engineering import pipeline as feature_engineering_pipe
 from .pipelines.model_training import pipeline as model_training_pipe
+from .pipelines.data_preparation import pipeline as data_preparation_pipe
 
 def register_pipelines() -> dict[str, Pipeline]:
     """Register the project's pipelines.
@@ -17,12 +18,14 @@ def register_pipelines() -> dict[str, Pipeline]:
     pipelines = find_pipelines()
     #create the data ingestion pipeline
     data_ingestion_pipeline = data_ingestion_pipe.create_pipeline()
+    data_preparation_pipeline = data_preparation_pipe.create_pipeline()
     #create the ML pipeline
-    feature_engineering_pipeline = feature_engineering_pipe.create_pipeline()
-    model_training_pipeline = model_training_pipe.create_pipeline()
-    training_pipeline = model_training_pipeline + feature_engineering_pipeline
+    #feature_engineering_pipeline = feature_engineering_pipe.create_pipeline()
+    #model_training_pipeline = model_training_pipe.create_pipeline()
+    #training_pipeline =    model_training_pipeline + feature_engineering_pipeline
     return {
         "__default__": sum(pipelines.values()),
-        "data_ingestion": data_ingestion_pipeline,
-        "training_pipeline": training_pipeline,
+        "ingestion_pipeline": data_ingestion_pipeline,
+        "preparation_pipeline": data_preparation_pipeline,
+        #"training_pipeline": training_pipeline,
     }
