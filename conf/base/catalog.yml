@@ -9,7 +9,18 @@ raw_csv_data:
   type: partitions.PartitionedDataset
   dataset: pandas.CSVDataset
   path: data/01_raw/
-  filename_suffix: .csv
+
+########################################## DATA PREPARATION ##########################################
+merged_data:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/merged_data.csv
+
+########################################## DATA VISUALIZATION ##########################################
+ticket_evolution: 
+  type: partitions.PartitionedDataset
+  dataset: matplotlib.MatplotlibWriter
+  path: data/02_intermediate/ticket_evolution_figures
+  filename_suffix: ".png"
 
 #######################################
 sales_train_data:
