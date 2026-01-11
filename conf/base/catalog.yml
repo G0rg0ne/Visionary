@@ -17,9 +17,8 @@ merged_data:
 
 ########################################## DATA VISUALIZATION ##########################################
 ticket_evolution: 
-  type: partitions.PartitionedDataset
-  dataset: matplotlib.MatplotlibWriter
-  path: data/02_intermediate/ticket_evolution_figures
+  type: visionary.datasets.generator_figure_dataset.GeneratorFigureDataset
+  path: data/08_reporting/ticket_evolution_figures
   filename_suffix: ".png"
 
 #######################################
