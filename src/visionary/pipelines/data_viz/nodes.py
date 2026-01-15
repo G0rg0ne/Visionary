@@ -37,6 +37,10 @@ class FigureGenerator:
             # Sort by days_before_departure to show evolution as departure approaches
             group_sorted = group.sort_values('days_before_departure')
             
+            # Skip groups with fewer than 4 data points
+            if len(group_sorted) < 4:
+                continue
+            
             # Create a unique flight identifier for the dictionary key
             flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}"
             
