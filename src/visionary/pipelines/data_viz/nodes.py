@@ -62,6 +62,8 @@ class FigureGenerator:
             ax.set_title(f'Price Evolution: {origin} → {dest} | {dep_date.strftime("%Y-%m-%d")} {dep_time}', 
                          fontsize=14, fontweight='bold')
             ax.grid(True, alpha=0.3)
+            # Reverse x-axis to show evolution from oldest to newest (approaching departure)
+            ax.invert_xaxis()
             
             plt.tight_layout()
             
@@ -112,6 +114,8 @@ def _generate_figures(merged_data: pd.DataFrame):
         ax.set_title(f'Price Evolution: {origin} → {dest} | {dep_date.strftime("%Y-%m-%d")} {dep_time}', 
                      fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
+        # Reverse x-axis to show evolution from oldest to newest (approaching departure)
+        ax.invert_xaxis()
         
         plt.tight_layout()
         
