@@ -30,7 +30,7 @@ def register_pipelines() -> dict[str, Pipeline]:
     return {
         "__default__": sum(pipelines.values()),
         "ingestion_pipeline": data_ingestion_pipeline,
-        "preparation_pipeline": data_preparation_pipeline,
+        "fusion_pipeline": data_preparation_pipeline,
         "viz_pipeline": data_viz_pipeline,
         #"training_pipeline": training_pipeline,
     }
