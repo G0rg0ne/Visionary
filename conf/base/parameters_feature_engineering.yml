@@ -4,4 +4,16 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
-split_date: '2015-06-01'
+
+airport_country_mapping:
+  CDG: FR
+  MAD: ES
+  FRA: DE
+  LHR: GB
+  IST: TR
+  AMS: NL
+  FCO: IT
+  BCN: ES
+  PMI: ES
+  AGP: ES
+  ATH: GR
