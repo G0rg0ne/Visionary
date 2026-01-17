@@ -6,6 +6,7 @@ generated using Kedro 1.1.1
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Iterator, Tuple
+from loguru import logger
 
 class FigureGenerator:
     """
@@ -22,27 +23,26 @@ class FigureGenerator:
         merged_data = self.merged_data.copy()
         merged_data['query_date'] = pd.to_datetime(merged_data['query_date'])
         merged_data['departure_date'] = pd.to_datetime(merged_data['departure_date'])
-        
+        unique_flights_def_columns = ["origin","destination", "departure_date","departure_time", "airline","flight_duration"]
         # Group by unique flight
-        flight_groups = merged_data.groupby(['origin', 'destination', 'departure_date', 'departure_time'])
+        flight_groups = merged_data.groupby(unique_flights_def_columns)
         
         # Create and yield a figure for each unique flight
         for group_key, group in flight_groups:
             # Unpack the groupby key safely
-            if isinstance(group_key, tuple) and len(group_key) == 4:
-                origin, dest, dep_date, dep_time = group_key
+            if isinstance(group_key, tuple) and len(group_key) == 6:
+                origin, dest, dep_date, dep_time, airline, flight_duration = group_key
             else:
                 raise ValueError(f"Unexpected groupby key structure: {group_key} (type: {type(group_key)})")
             
             # Sort by days_before_departure to show evolution as departure approaches
             group_sorted = group.sort_values('days_before_departure')
-            
+            price_variation = group_sorted['price'].nunique() > 1
             # Skip groups with fewer than 4 data points
-            if len(group_sorted) < 4:
+            if len(group_sorted) < 4 or not price_variation:
                 continue
-            
             # Create a unique flight identifier for the dictionary key
-            flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}"
+            flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}_{airline}_{flight_duration}"
             
             # Create figure for this flight
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -78,15 +78,15 @@ def _generate_figures(merged_data: pd.DataFrame):
     merged_data = merged_data.copy()
     merged_data['query_date'] = pd.to_datetime(merged_data['query_date'])
     merged_data['departure_date'] = pd.to_datetime(merged_data['departure_date'])
-    
+    unique_flights_def_columns = ["origin","destination", "departure_date","departure_time", "airline","flight_duration"]
     # Group by unique flight
-    flight_groups = merged_data.groupby(['origin', 'destination', 'departure_date', 'departure_time'])
+    flight_groups = merged_data.groupby(unique_flights_def_columns)
     
     # Create and yield a figure for each unique flight
     for group_key, group in flight_groups:
         # Unpack the groupby key safely
-        if isinstance(group_key, tuple) and len(group_key) == 4:
-            origin, dest, dep_date, dep_time = group_key
+        if isinstance(group_key, tuple) and len(group_key) == 6:
+            origin, dest, dep_date, dep_time, airline, flight_duration = group_key
         else:
             raise ValueError(f"Unexpected groupby key structure: {group_key} (type: {type(group_key)})")
         
@@ -94,7 +94,7 @@ def _generate_figures(merged_data: pd.DataFrame):
         group_sorted = group.sort_values('days_before_departure')
         
         # Create a unique flight identifier for the dictionary key
-        flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}"
+        flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}_{airline}_{flight_duration}"
         
         # Create figure for this flight
         fig, ax = plt.subplots(figsize=(10, 6))
