@@ -12,6 +12,18 @@ def fix_data_types(merged_data: pd.DataFrame) -> pd.DataFrame:
     merged_data['departure_date'] = pd.to_datetime(merged_data['departure_date'])
     return merged_data
 
+def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
+    """Extract temporal features from departure_date.
+    
+    Adds:
+    - day_of_week: Day of week as integer (0=Monday, 6=Sunday)
+    - is_weekend: Boolean indicating if departure is on weekend (Saturday or Sunday)
+    """
+    merged_data['departure_day_of_week'] = merged_data['departure_date'].dt.dayofweek
+    merged_data['departure_is_weekend'] = merged_data['departure_date'].dt.dayofweek.isin([5, 6])
+    
+    return merged_data
+
 def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
     merged_data['origin_country'] = merged_data['origin'].map(airport_country_mapping)
     merged_data['destination_country'] = merged_data['destination'].map(airport_country_mapping)
@@ -21,5 +33,6 @@ def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd
 
 def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
     merged_data = fix_data_types(merged_data)
+    merged_data = add_temporal_features(merged_data)
     merged_data = add_holidays(merged_data, airport_country_mapping)
     return merged_data
