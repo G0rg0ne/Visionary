@@ -21,53 +21,7 @@ ticket_evolution:
   path: data/08_reporting/ticket_evolution_figures
   filename_suffix: ".png"
 
-#######################################
-sales_train_data:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/train.csv
-
-sales_test_data:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/test.csv
-
-stores_info:
-  type: pandas.CSVDataset
-  filepath: data/01_raw/store.csv
-  
-########################################## DATA VISUALIZATION ##########################################
-sales_graph_html:
-  type: kedro_datasets.text.TextDataset
-  filepath: data/08_reporting/sales_graph.html
-
-top_10_stores_by_total_sales_graph_html:
-  type: kedro_datasets.text.TextDataset
-  filepath: data/08_reporting/top_10_stores_by_total_sales_graph.html
-
-correlation_matrix_html:
-  type: kedro_datasets.text.TextDataset
-  filepath: data/08_reporting/correlation_matrix.html
-
-store_stats_graph_html:
-  type: kedro_datasets.text.TextDataset
-  filepath: data/08_reporting/store_stats_graph.html
-
 ########################################## FEATURE ENGINEERING ##########################################
-
-df_train_prophet:
+merged_data_with_holidays:
   type: pandas.CSVDataset
-  filepath: data/02_intermediate/df_prophet.csv
-
-future_evaluation:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/future.csv
-
-store_holidays:
-  type: pandas.CSVDataset
-  filepath: data/02_intermediate/store_holidays.csv
-
-########################################## MODEL TRAINING ##########################################
-prophet_models:
-  type: partitions.PartitionedDataset
-  dataset: visionary.datasets.prophet_model.ProphetModelDataset
-  path: data/06_models/ProphetModels/
-  filename_suffix: .joblib
+  filepath: data/04_feature/merged_data_with_holidays.csv
