@@ -54,7 +54,10 @@ def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict
     merged_data = fix_data_types(merged_data)
     merged_data = add_temporal_features(merged_data)
     merged_data = add_holidays(merged_data, airport_country_mapping)
-    cols_to_drop = ['departure_time', 'arrival_time', 'currency', 'price', 'source', 'departure_date', 'arrival_date', 'departure_time_dt', 'arrival_time_dt', 'query_date','cabin', 'offer_rank']
-    X = merged_data.drop(columns=cols_to_drop)
-    y = merged_data['price']
     return merged_data
+
+def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
+    cols_to_drop = ['departure_time', 'arrival_time', 'currency', 'price', 'source', 'departure_date', 'departure_time_dt', 'arrival_time_dt', 'query_date','cabin', 'offer_rank']
+    X = merged_data.drop(columns=['price'])
+    y = merged_data['price']
+    return X, y

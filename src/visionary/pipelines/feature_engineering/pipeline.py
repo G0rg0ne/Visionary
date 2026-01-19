@@ -7,6 +7,7 @@ from kedro.pipeline import Node, Pipeline  # noqa
 
 from .nodes import (
     feature_engineering,
+    split_data,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -18,5 +19,11 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="merged_data_with_holidays",
                 name="feature_engineering",
                 ),
+            Node(
+                split_data,
+                inputs="merged_data_with_holidays",
+                outputs=["tickets_train_data", "tickets_test_data"],
+                name="split_data",
+            ),
         ]
     )
