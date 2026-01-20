@@ -4,15 +4,7 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
-mlflow_experiment_name: "prophet_forecasting_experiment"
-mlflow_run_name: "prophet_model_run_v1"
-
 model_training_parameters:
-  yearly_seasonality: true
-  weekly_seasonality: true
-  daily_seasonality: false
-  interval_width: 0.95
-  regressors:
-    - Promo
-    - Open
-    - SchoolHoliday
+  n_estimators: 100
+  max_depth: 10
+  random_state: 42
