@@ -165,3 +165,5 @@ mlflow.db
 /brainstorming_doc/*
 
 CLAUDE.md
+
+catboost_info/*
