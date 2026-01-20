@@ -1,240 +1,134 @@
 """
-This is a boilerplate pipeline 'model_training'
-generated using Kedro 1.1.1
+Model training nodes for the Visionary pipeline.
 """
-
 import pandas as pd
 import numpy as np
-from prophet import Prophet
-from loguru import logger
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from typing import Dict, Tuple, Any
+from catboost import CatBoostRegressor
 import mlflow
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import matplotlib.pyplot as plt
-import os
+import mlflow.catboost
+from loguru import logger
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from typing import Dict, Any
 
-def train_model(df_train_prophet: pd.DataFrame, store_holidays: pd.DataFrame, 
-                future_evaluation: pd.DataFrame, mlflow_experiment_name: str, mlflow_run_name: str, model_training_parameters: Dict[str, Any]):
+
+def train_model(
+    tickets_train_data: pd.DataFrame,
+    tickets_test_data: pd.DataFrame,
+    params: Dict[str, Any],
+) -> None:
     """
-    Train Prophet models for each store.
-    Assumes data is clean and ready for training.
+    Train a CatBoost model and log the experiment to MLflow.
     
     Args:
-        df_train_prophet: Training data with 'Store', 'Date', 'Sales' columns and optional regressors
-        store_holidays: Holiday dataframe in Prophet format (ds, holiday columns)
-        mlflow_experiment_name: Name of the MLflow experiment
-        mlflow_run_name: Name of the MLflow run
-        model_training_parameters: Dictionary of Prophet model parameters
-    
-    Returns:
-        Dictionary of trained Prophet models keyed by store ID (e.g., {"store_1": model1, "store_2": model2})
+        tickets_train_data: Training dataset with features and target
+        tickets_test_data: Test dataset with features and target
+        params: Dictionary containing model training parameters
     """
-    # Data validation
-    if df_train_prophet.empty:
-        raise ValueError("Training dataframe is empty")
+    # Identify target column (assuming 'price' is the target)
+    target_col = "price"
+
+    categorical_features = tickets_train_data.select_dtypes(include=["object", "string", "bool"]).columns.tolist()
     
-    mlflow.set_experiment(mlflow_experiment_name)
-    logger.info(f"MLflow experiment: {mlflow_experiment_name}")
-    logger.info("=" * 50)
-    logger.info("TRAINING PROPHET MODEL")
-    logger.info("=" * 50)
-    available_stores = df_train_prophet['Store'].unique()
-    logger.info(f"Training models for {len(available_stores)} stores")
-    prophet_models = {}
-    regressors = model_training_parameters['regressors']
+    # Convert NaN values in categorical features to strings (CatBoost requirement)
+    for col in categorical_features:
+        if tickets_train_data[col].isna().any():
+            tickets_train_data[col] = tickets_train_data[col].fillna('None').astype(str)
+        if tickets_test_data[col].isna().any():
+            tickets_test_data[col] = tickets_test_data[col].fillna('None').astype(str)
     
-    # Start parent run for overall training process
-    with mlflow.start_run(run_name=mlflow_run_name):
-        logger.info(f"MLflow parent run: {mlflow_run_name}")
-        
-        # Log parent-level parameters
+    if target_col not in tickets_train_data.columns:
+        raise ValueError(f"Target column '{target_col}' not found in training data")
+    import pdb; pdb.set_trace()
+    # Separate features and target
+    X_train = tickets_train_data.drop(columns=[target_col])
+    y_train = tickets_train_data[target_col]
+    X_test = tickets_test_data.drop(columns=[target_col])
+    y_test = tickets_test_data[target_col]
+    
+    # Identify categorical features
+    categorical_features = X_train.select_dtypes(include=["object", "string", "bool"]).columns.tolist()
+    
+    logger.info(f"Training data shape: {X_train.shape}")
+    logger.info(f"Test data shape: {X_test.shape}")
+    logger.info(f"Categorical features: {categorical_features}")
+    logger.info(f"Numerical features: {len(X_train.columns) - len(categorical_features)}")
+    
+    # Prepare CatBoost parameters
+    catboost_params = {
+        "iterations": params.get("n_estimators", 100),
+        "depth": params.get("max_depth", 10),
+        "random_state": params.get("random_state", 42),
+        "loss_function": "RMSE",
+        "verbose": False,
+        "cat_features": categorical_features if categorical_features else None,
+    }
+    
+    # Remove None values from params
+    catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
+    
+    # Start MLflow experiment
+    mlflow.set_experiment("visionary_price_prediction")
+    
+    with mlflow.start_run():
+        # Log parameters
+        mlflow.log_params(catboost_params)
         mlflow.log_params({
-            'total_stores': len(available_stores),
-            'yearly_seasonality': model_training_parameters['yearly_seasonality'],
-            'weekly_seasonality': model_training_parameters['weekly_seasonality'],
-            'daily_seasonality': model_training_parameters['daily_seasonality'],
-            'interval_width': model_training_parameters['interval_width'],
-            'has_holidays': True if store_holidays is not None and not store_holidays.empty else False,
-            'regressor_list': ','.join(regressors)
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "n_features": len(X_train.columns),
+            "n_categorical_features": len(categorical_features),
         })
         
-        # Train models for each store as nested (child) runs
-        for store in available_stores:
-            try:
-                df_train_prophet_store = df_train_prophet[df_train_prophet['Store'] == store].copy()
-                
-                # Validate store-specific data
-                if df_train_prophet_store.empty:
-                    logger.warning(f"Store {store} has no data, skipping")
-                    continue
-                
-                # Create nested (child) run for this store
-                with mlflow.start_run(run_name=f"store_{store}", nested=True):
-                    logger.info(f"MLflow nested run: store_{store}")
-                    
-                    prophet_model = Prophet(
-                        holidays=store_holidays,
-                        yearly_seasonality=model_training_parameters['yearly_seasonality'],
-                        weekly_seasonality=model_training_parameters['weekly_seasonality'],
-                        daily_seasonality=model_training_parameters['daily_seasonality'],
-                        interval_width=model_training_parameters['interval_width']
-                    )
-                    
-                    # Track which regressors were actually added
-                    added_regressors = []
-                    for regressor in regressors:
-                        if regressor in df_train_prophet_store.columns:
-                            prophet_model.add_regressor(regressor)
-                            added_regressors.append(regressor)
-                            logger.info(f"Added regressor: {regressor}")
-                        else:
-                            logger.info(f"Regressor {regressor} not found in data")
-                    
-                    prophet_model.fit(df_train_prophet_store)
-                    prophet_models[f"store_{store}"] = prophet_model
-                    logger.info(f"Trained model for store: {store}")
-                    
-                    # Evaluate model on evaluation data set
-                    # Filter evaluation data for this store and handle index alignment
-                    future_eval_store = future_evaluation.loc[future_evaluation['Store'] == store].copy()
-                    
-                    if future_eval_store.empty:
-                        logger.warning(f"Store {store} has no evaluation data, skipping metrics")
-                    else:
-                        # Ensure the dataframe has required columns for Prophet
-                        future_eval_prophet = future_eval_store.copy()
-                        # Prophet expects 'ds' column (already renamed in feature engineering)
-                        # and needs regressors if they were used
-                        metrics = evaluate_model(prophet_model, future_eval_prophet)
-                        # Filter out NaN metrics before logging
-                        valid_metrics = {k: float(v) for k, v in metrics.items() if not np.isnan(v)}
-                        if valid_metrics:
-                            mlflow.log_metrics(valid_metrics)
-                            logger.info(f"Logged metrics for store: {store}")
-                        else:
-                            logger.warning(f"No valid metrics to log for store: {store}")
-
-                    mlflow.prophet.log_model(prophet_model, name=f"prophet_model_store_{store}")
-                    
-                    logger.info(f"Logged model for store: {store}")
-            
-            except Exception as e:
-                logger.error(f"Error training model for store {store}: {str(e)}")
-                # Nested run will be automatically closed by context manager
-                # Continue with next store instead of raising
-                continue
+        # Initialize and train model
+        logger.info("Training CatBoost model...")
+        model = CatBoostRegressor(**catboost_params)
+        model.fit(
+            X_train,
+            y_train,
+            eval_set=(X_test, y_test),
+            verbose=False,
+        )
         
-        # Log summary metrics to parent run
-        if prophet_models:
-            mlflow.log_metric('successful_models', len(prophet_models))
-            mlflow.log_metric('failed_models', len(available_stores) - len(prophet_models))
-            logger.info(f"Parent run completed: {len(prophet_models)}/{len(available_stores)} models trained successfully")
-    
-    if not prophet_models:
-        raise ValueError("No models were successfully trained")
-    
-    logger.info(f"Successfully trained {len(prophet_models)} models")
-    return prophet_models
-
-
-def calculate_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, float]:
-    """
-    Calculate comprehensive evaluation metrics.
-    
-    Args:
-        y_true: True values
-        y_pred: Predicted values
-    
-    Returns:
-        Dictionary of metrics
-    """
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-    
-    # Mean Absolute Percentage Error (MAPE) - useful for sales forecasting
-    # Avoid division by zero
-    mask = y_true != 0
-    if mask.sum() > 0:
-        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
-    else:
-        mape = np.nan
-        logger.warning("Cannot calculate MAPE: all true values are zero")
-    
-    # Mean Absolute Scaled Error (MASE) - scale-independent metric
-    # Using naive forecast as baseline (shift by 1 period)
-    if len(y_true) > 1:
-        naive_forecast = y_true.shift(1).dropna()
-        naive_actual = y_true.iloc[1:]
-        if len(naive_forecast) > 0 and naive_actual.std() > 0:
-            mase = mae / np.mean(np.abs(naive_actual - naive_forecast))
-        else:
-            mase = np.nan
-    else:
-        mase = np.nan
-    
-    return {
-        'MSE': mse,
-        'RMSE': rmse,
-        'MAE': mae,
-        'R2': r2,
-        'MAPE': mape,
-        'MASE': mase
-    }
-
-def evaluate_model(model: Prophet, future: pd.DataFrame) -> Dict[str, float]:
-    """
-    Evaluate the model on test/validation data with comprehensive metrics.
-    Assumes test data is clean and ready for evaluation.
-    
-    Args:
-        model: Trained Prophet model
-        future: Test data with 'ds' and 'Sales' columns, and optional regressors
-    
-    Returns:
-        Dictionary of evaluation metrics
-    """
-    # Validate required columns
-    if 'ds' not in future.columns:
-        raise ValueError("Future dataframe must have 'ds' column")
-    if 'Sales' not in future.columns:
-        raise ValueError("Future dataframe must have 'Sales' column")
-    
-    # Prepare data for prediction - keep only 'ds' and regressors
-    # Prophet will ignore other columns, but it's cleaner to only pass what's needed
-    prediction_data = future[['ds']].copy()
-    
-    # Add regressors if they exist in the future dataframe
-    # Check which regressors the model expects by looking at what was added during training
-    # For now, we'll include common regressors if they exist
-    regressor_cols = ['Promo', 'Open', 'SchoolHoliday']
-    for reg in regressor_cols:
-        if reg in future.columns:
-            prediction_data[reg] = future[reg]
-    
-    # Make predictions
-    y_true = future['Sales'].values
-    forecast = model.predict(prediction_data)
-    y_pred = forecast['yhat'].values
-    
-    # Ensure y_true and y_pred have the same length
-    if len(y_true) != len(y_pred):
-        min_len = min(len(y_true), len(y_pred))
-        y_true = y_true[:min_len]
-        y_pred = y_pred[:min_len]
-        logger.warning(f"Mismatch in lengths, using first {min_len} values")
-    
-    # Calculate metrics
-    metrics = calculate_metrics(pd.Series(y_true), pd.Series(y_pred))
-    
-    logger.info("\nTest Metrics:")
-    for metric_name, metric_value in metrics.items():
-        if not np.isnan(metric_value):
-            logger.info(f"  {metric_name}: {metric_value:.4f}")
-        else:
-            logger.info(f"  {metric_name}: N/A")
-    
-    return metrics
+        # Make predictions
+        logger.info("Making predictions...")
+        y_train_pred = model.predict(X_train)
+        y_test_pred = model.predict(X_test)
+        
+        # Calculate metrics
+        train_mae = mean_absolute_error(y_train, y_train_pred)
+        train_rmse = np.sqrt(mean_squared_error(y_train, y_train_pred))
+        train_r2 = r2_score(y_train, y_train_pred)
+        
+        test_mae = mean_absolute_error(y_test, y_test_pred)
+        test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred))
+        test_r2 = r2_score(y_test, y_test_pred)
+        
+        # Log metrics
+        mlflow.log_metrics({
+            "train_mae": train_mae,
+            "train_rmse": train_rmse,
+            "train_r2": train_r2,
+            "test_mae": test_mae,
+            "test_rmse": test_rmse,
+            "test_r2": test_r2,
+        })
+        
+        # Log model
+        mlflow.catboost.log_model(model, name="model")
+        
+        # Log feature importance
+        feature_importance = pd.DataFrame({
+            "feature": X_train.columns,
+            "importance": model.get_feature_importance(),
+        }).sort_values("importance", ascending=False)
+        
+        mlflow.log_table(
+            data=feature_importance,
+            artifact_file="feature_importance.json",
+        )
+        
+        logger.info("Model training completed!")
+        logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
+        logger.info(f"Test RMSE: {test_rmse:.2f}, Test R²: {test_r2:.4f}")
+        logger.info(f"MLflow run ID: {mlflow.active_run().info.run_id}")
+        logger.info(f"MLflow experiment: {mlflow.get_experiment_by_name('visionary_price_prediction').experiment_id}")

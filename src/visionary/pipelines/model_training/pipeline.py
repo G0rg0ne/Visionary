@@ -14,14 +14,11 @@ def create_pipeline(**kwargs) -> Pipeline:
         Node(
             train_model,
             inputs=[
-                "df_train_prophet",
-                "store_holidays",
-                "future_evaluation",
-                "params:mlflow_experiment_name",
-                "params:mlflow_run_name",
+                "tickets_train_data",
+                "tickets_test_data",
                 "params:model_training_parameters",
             ],
             name="train_model",
-            outputs="prophet_models",
+            outputs= None,
         ),
     ])
