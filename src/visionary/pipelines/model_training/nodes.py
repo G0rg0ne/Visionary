@@ -9,6 +9,64 @@ import mlflow.catboost
 from loguru import logger
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from typing import Dict, Any
+import shap
+import matplotlib.pyplot as plt
+import tempfile
+import os
+
+
+def log_shap_feature_importance(
+    model: CatBoostRegressor,
+    X_test: pd.DataFrame,
+    params: Dict[str, Any],
+    top_n: int = 5,
+) -> None:
+    """
+    Generate and log SHAP feature importance plot to MLflow.
+    
+    Args:
+        model: Trained CatBoost model
+        X_test: Test dataset features
+        params: Dictionary containing parameters (for random_state)
+        top_n: Number of top features to display (default: 5)
+    """
+    logger.info("Computing SHAP values...")
+    # Use a sample of test data for SHAP computation (for efficiency)
+    sample_size = min(100, len(X_test))
+    X_test_sample = X_test.sample(n=sample_size, random_state=params.get("random_state", 42))
+    
+    # Create SHAP explainer
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_test_sample)
+    
+    # Calculate mean absolute SHAP values for each feature
+    mean_shap_values = np.abs(shap_values).mean(axis=0)
+    shap_importance_df = pd.DataFrame({
+        "feature": X_test_sample.columns,
+        "shap_importance": mean_shap_values,
+    }).sort_values("shap_importance", ascending=False)
+    
+    # Get top N features
+    top_features = shap_importance_df.head(top_n)
+    
+    # Create visualization
+    plt.figure(figsize=(10, 6))
+    plt.barh(range(len(top_features)), top_features["shap_importance"].values)
+    plt.yticks(range(len(top_features)), top_features["feature"].values)
+    plt.xlabel("Mean |SHAP Value|", fontsize=12)
+    plt.title(f"Top {top_n} Features by SHAP Importance", fontsize=14, fontweight="bold")
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    
+    # Save plot to temporary file and log to MLflow
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+        plt.savefig(tmp_file.name, dpi=150, bbox_inches="tight")
+        mlflow.log_artifact(tmp_file.name, "shap_feature_importance")
+        os.unlink(tmp_file.name)
+    
+    plt.close()
+    
+    logger.info("SHAP feature importance plot logged to MLflow")
 
 
 def train_model(
@@ -38,7 +96,7 @@ def train_model(
     
     if target_col not in tickets_train_data.columns:
         raise ValueError(f"Target column '{target_col}' not found in training data")
-    import pdb; pdb.set_trace()
+    
     # Separate features and target
     X_train = tickets_train_data.drop(columns=[target_col])
     y_train = tickets_train_data[target_col]
@@ -126,6 +184,9 @@ def train_model(
             data=feature_importance,
             artifact_file="feature_importance.json",
         )
+        
+        # Generate and log SHAP feature importance plot
+        log_shap_feature_importance(model, X_test, params, top_n=5)
         
         logger.info("Model training completed!")
         logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
