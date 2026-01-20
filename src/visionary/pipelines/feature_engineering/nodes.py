@@ -37,10 +37,10 @@ def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
-    cat_cols = ['origin', 'destination', 'airline', 'cabin_class', 'arrival_airport']
+    merged_data['departure_is_weekend'] = merged_data['departure_is_weekend'].astype(bool)
+    cat_cols = ['origin', 'destination', 'airline','origin_country','destination_country']
     for col in cat_cols:
-        # Fill missing values with 'None' and ensure type is string
-        merged_data[col] = merged_data[col].replace('', None).fillna('None').astype(str)
+        merged_data[col] = merged_data[col].fillna('None').astype(str)
     return merged_data
 
 def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
@@ -50,10 +50,18 @@ def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd
     merged_data['destination_departure_holidays'] = merged_data.apply(lambda row: CountryHoliday(row['destination_country'], years=row['departure_date'].year).get(row['departure_date']), axis=1)
     return merged_data
 
+def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
+    cat_cols = ['origin', 'destination', 'airline', 'origin_country', 'destination_country',"origin_departure_holidays","destination_departure_holidays"]
+    for col in cat_cols:
+        # Fill missing values with 'None' and ensure type is string
+        merged_data[col] = merged_data[col].replace('', None).fillna('None').astype(str)
+    return merged_data
+
 def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
     merged_data = fix_data_types(merged_data)
     merged_data = add_temporal_features(merged_data)
     merged_data = add_holidays(merged_data, airport_country_mapping)
+    merged_data = handle_categorical_features(merged_data)
     return merged_data
 
 def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
