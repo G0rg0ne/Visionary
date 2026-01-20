@@ -57,7 +57,29 @@ def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict
     return merged_data
 
 def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
-    cols_to_drop = ['departure_time', 'arrival_time', 'currency', 'price', 'source', 'departure_date', 'departure_time_dt', 'arrival_time_dt', 'query_date','cabin', 'offer_rank']
-    X = merged_data.drop(columns=['price'])
-    y = merged_data['price']
-    return X, y
+    
+    merged_data = merged_data.sort_values('query_date').reset_index(drop=True)
+    split_idx = int(len(merged_data) * 0.8)
+    split_date = merged_data.iloc[split_idx]['query_date']
+    # Split chronologically
+    train_data = merged_data[merged_data['query_date'] < split_date].copy()
+    test_data = merged_data[merged_data['query_date'] >= split_date].copy()
+    logger.info(f"Train/Test split date: {split_date}")
+    logger.info(f"Train set: {len(train_data)} rows (query_date < {split_date})")
+    logger.info(f"Test set: {len(test_data)} rows (query_date >= {split_date})")
+    logger.info(f"Train date range: {train_data['query_date'].min()} to {train_data['query_date'].max()}")
+    logger.info(f"Test date range: {test_data['query_date'].min()} to {test_data['query_date'].max()}")
+    # Drop columns that shouldn't be in features (if not already dropped)
+    cols_to_drop = ['departure_time', 'arrival_time', 'currency', 'source', 
+                    'departure_date', 'departure_time_dt', 'arrival_time_dt', 
+                    'query_date', 'cabin', 'offer_rank']
+    
+    # Only drop columns that exist
+    cols_to_drop = [col for col in cols_to_drop if col in train_data.columns]
+    
+    train_data = train_data.drop(columns=cols_to_drop)
+    test_data = test_data.drop(columns=cols_to_drop)
+    
+    return train_data, test_data
+
+
