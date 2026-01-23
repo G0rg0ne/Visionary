@@ -137,6 +137,22 @@ def train_model(
             "n_categorical_features": len(categorical_features),
         })
         
+            # Log features used for training
+        all_features = X_train.columns.tolist()
+        numerical_features = [f for f in all_features if f not in categorical_features]
+        
+        features_metadata = pd.DataFrame({
+            "feature": all_features,
+            "type": ["categorical" if f in categorical_features else "numerical" for f in all_features],
+        })
+        
+        mlflow.log_table(
+            data=features_metadata,
+            artifact_file="training_features.json",
+        )
+        
+        logger.info(f"Logged {len(all_features)} training features to MLflow")
+        
         # Initialize and train model
         logger.info("Training CatBoost model...")
         model = CatBoostRegressor(**catboost_params)
