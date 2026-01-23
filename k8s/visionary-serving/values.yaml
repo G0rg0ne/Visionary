@@ -1,0 +1,113 @@
+# Default values for visionary-serving
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: visionary-serving
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: visionary.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: visionary-tls
+  #    hosts:
+  #      - visionary.local
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application-specific configuration
+app:
+  # Uvicorn settings
+  workers: 4
+  host: "0.0.0.0"
+  port: 8000
+  logLevel: "info"
+  
+  # MLflow settings
+  mlflowTrackingUri: "http://mlflow:5000"
+  modelName: "visionary_price_predictor"
+  modelStage: "Production"
+
+# Health check configuration
+healthCheck:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# ConfigMap for environment variables
+env:
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# Secrets (reference existing secrets or create inline for dev)
+secrets:
+  # Reference to existing secret containing credentials
+  existingSecret: ""
+  # Inline secrets for development (not recommended for production)
+  inline: {}
+    # MLFLOW_TRACKING_USERNAME: ""
+    # MLFLOW_TRACKING_PASSWORD: ""

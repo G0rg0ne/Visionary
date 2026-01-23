@@ -1,0 +1,17 @@
+apiVersion: v2
+name: visionary-serving
+description: A Helm chart for deploying Visionary ML model serving API with FastAPI and Uvicorn
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - machine-learning
+  - model-serving
+  - fastapi
+  - catboost
+  - mlflow
+maintainers:
+  - name: g0rg0ne
+home: https://github.com/your-org/visionary
+sources:
+  - https://github.com/your-org/visionary
