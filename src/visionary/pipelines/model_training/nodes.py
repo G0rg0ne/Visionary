@@ -121,13 +121,13 @@ def train_model(
         "cat_features": categorical_features if categorical_features else None,
     }
     
-    # Remove None values from params
+    # Remove None values from params0
     catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
     
     # Start MLflow experiment
     mlflow.set_experiment("visionary_price_prediction")
     
-    with mlflow.start_run():
+    with mlflow.start_run(description=params.get("run_description", "")):
         # Log parameters
         mlflow.log_params(catboost_params)
         mlflow.log_params({
