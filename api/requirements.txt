@@ -1,0 +1,18 @@
+# Visionary Model Serving API Dependencies
+
+# Web framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+
+# ML and data
+pandas>=2.0.0
+numpy>=1.24.0
+catboost>=1.2.0
+mlflow>=2.10.0
+
+# Logging
+loguru>=0.7.0
+
+# HTTP client (for MLflow)
+requests>=2.31.0
