@@ -6,7 +6,7 @@ FastAPI application for serving the CatBoost price prediction model.
 
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import mlflow.catboost
 import pandas as pd
@@ -15,10 +15,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
 
-# Environment configuration
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-MODEL_NAME = os.getenv("MODEL_NAME", "visionary_price_predictor")
-MODEL_STAGE = os.getenv("MODEL_STAGE", "Production")
+# Environment variables (configured via k8s/values.yaml -> ConfigMap)
+MLFLOW_TRACKING_URI = os.environ["MLFLOW_TRACKING_URI"]
+MODEL_NAME = os.environ["MODEL_NAME"]
+MODEL_STAGE = os.environ["MODEL_STAGE"]
+MODEL_PATH = os.getenv("MODEL_PATH", "")
 
 # Global model reference
 model = None
@@ -33,13 +34,17 @@ async def lifespan(app: FastAPI):
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     logger.info(f"MLflow tracking URI: {MLFLOW_TRACKING_URI}")
     
-    # Load model from MLflow registry
-    model_uri = f"models:/{MODEL_NAME}/{MODEL_STAGE}"
-    logger.info(f"Loading model from: {model_uri}")
+    # Determine model source
+    if MODEL_PATH:
+        model_uri = MODEL_PATH
+        logger.info(f"Loading model from path: {model_uri}")
+    else:
+        model_uri = f"models:/{MODEL_NAME}/{MODEL_STAGE}"
+        logger.info(f"Loading model from MLflow registry: {model_uri}")
     
     try:
         model = mlflow.catboost.load_model(model_uri)
-        logger.success(f"Model loaded successfully: {MODEL_NAME} ({MODEL_STAGE})")
+        logger.success(f"Model loaded successfully from: {model_uri}")
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         raise RuntimeError(f"Could not load model from {model_uri}: {e}")
@@ -71,19 +76,76 @@ app.add_middleware(
 )
 
 
+# ----- Required Features -----
+# Must match the exact order used during model training
+
+REQUIRED_FEATURES = [
+    "origin",
+    "destination",
+    "days_before_departure",
+    "airline",
+    "stops",
+    "flight_duration",
+    "departure_day_of_week",
+    "departure_is_weekend",
+    "departure_time_hour",
+    "departure_time_minute",
+    "arrival_time_hour",
+    "arrival_time_minute",
+    "origin_country",
+    "destination_country",
+    "origin_departure_holidays",
+    "destination_departure_holidays",
+]
+
+
 # ----- Request/Response Models -----
+
+class FlightFeatures(BaseModel):
+    """Feature set for a single flight prediction."""
+    
+    origin: str = Field(..., description="Origin airport code (e.g., 'CDG', 'MAD', 'LHR')")
+    destination: str = Field(..., description="Destination airport code (e.g., 'CDG', 'MAD', 'LHR')")
+    days_before_departure: int = Field(..., description="Number of days before departure (query_date to departure_date)")
+    airline: str = Field(..., description="Airline code or name")
+    stops: int = Field(..., description="Number of stops (0 = direct flight)")
+    flight_duration: float = Field(..., description="Flight duration in hours")
+    departure_day_of_week: int = Field(..., ge=0, le=6, description="Day of week (0=Monday, 6=Sunday)")
+    departure_is_weekend: bool = Field(..., description="Whether departure is on a weekend (Saturday or Sunday)")
+    departure_time_hour: int = Field(..., ge=0, le=23, description="Departure hour (0-23)")
+    departure_time_minute: int = Field(..., ge=0, le=59, description="Departure minute (0-59)")
+    arrival_time_hour: int = Field(..., ge=0, le=23, description="Arrival hour (0-23)")
+    arrival_time_minute: int = Field(..., ge=0, le=59, description="Arrival minute (0-59)")
+    origin_country: str = Field(..., description="ISO country code of origin airport (e.g., 'FR', 'ES', 'GB')")
+    destination_country: str = Field(..., description="ISO country code of destination airport (e.g., 'FR', 'ES', 'GB')")
+    origin_departure_holidays: str = Field(..., description="Holiday name at origin on departure date, or 'None' if not a holiday")
+    destination_departure_holidays: str = Field(..., description="Holiday name at destination on departure date, or 'None' if not a holiday")
+
 
 class PredictionRequest(BaseModel):
     """Request model for predictions."""
     
-    features: List[Dict[str, Any]] = Field(
+    features: List[FlightFeatures] = Field(
         ...,
-        description="List of feature dictionaries for prediction",
+        description="List of flight features for prediction",
         example=[
             {
-                "feature_1": 100,
-                "feature_2": "category_a",
-                "feature_3": 25.5,
+                "origin": "CDG",
+                "destination": "LHR",
+                "days_before_departure": 14,
+                "airline": "British Airways",
+                "stops": 0,
+                "flight_duration": 1.25,
+                "departure_day_of_week": 2,
+                "departure_is_weekend": False,
+                "departure_time_hour": 10,
+                "departure_time_minute": 30,
+                "arrival_time_hour": 11,
+                "arrival_time_minute": 45,
+                "origin_country": "FR",
+                "destination_country": "GB",
+                "origin_departure_holidays": "None",
+                "destination_departure_holidays": "None",
             }
         ],
     )
@@ -109,6 +171,7 @@ class HealthResponse(BaseModel):
     model_loaded: bool = Field(..., description="Whether model is loaded")
     model_name: Optional[str] = Field(None, description="Loaded model name")
     model_stage: Optional[str] = Field(None, description="Model stage")
+    mlflow_tracking_uri: Optional[str] = Field(None, description="MLflow tracking server URL")
 
 
 class ErrorResponse(BaseModel):
@@ -139,9 +202,15 @@ async def predict(request: PredictionRequest):
         )
     
     try:
-        # Convert features to DataFrame
-        df = pd.DataFrame(request.features)
+        # Convert Pydantic models to list of dicts and then to DataFrame
+        features_data = [feature.model_dump() for feature in request.features]
+        df = pd.DataFrame(features_data)
+        
+        # Ensure columns are in the expected order for the model
+        df = df[REQUIRED_FEATURES]
+        
         logger.info(f"Received prediction request with {len(df)} samples")
+        logger.debug(f"Features: {df.columns.tolist()}")
         
         # Generate predictions
         predictions = model.predict(df).tolist()
@@ -157,7 +226,7 @@ async def predict(request: PredictionRequest):
         logger.warning(f"Missing feature in request: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Missing required feature: {e}",
+            detail=f"Missing required feature: {e}. Required features: {REQUIRED_FEATURES}",
         )
     except Exception as e:
         logger.error(f"Prediction error: {e}")
@@ -181,6 +250,7 @@ async def health():
         model_loaded=model is not None,
         model_name=MODEL_NAME if model is not None else None,
         model_stage=MODEL_STAGE if model is not None else None,
+        mlflow_tracking_uri=MLFLOW_TRACKING_URI if model is not None else None,
     )
 
 
@@ -216,6 +286,38 @@ async def ready():
         )
     
     return {"status": "ready"}
+
+
+@app.get(
+    "/features",
+    summary="Get required features",
+    description="Returns the list of features required for prediction.",
+)
+async def get_features():
+    """Return the list of required features for prediction."""
+    
+    return {
+        "required_features": REQUIRED_FEATURES,
+        "count": len(REQUIRED_FEATURES),
+        "schema": {
+            "origin": "string (categorical) - Origin airport code (e.g., 'CDG', 'MAD', 'LHR')",
+            "destination": "string (categorical) - Destination airport code (e.g., 'CDG', 'MAD', 'LHR')",
+            "days_before_departure": "integer (numerical) - Days between query and departure",
+            "airline": "string (categorical) - Airline code or name",
+            "stops": "integer (numerical) - Number of stops (0 = direct)",
+            "flight_duration": "float (numerical) - Flight duration in hours",
+            "departure_day_of_week": "integer (numerical) - Day of week (0=Monday, 6=Sunday)",
+            "departure_is_weekend": "boolean (categorical) - Whether departure is on weekend",
+            "departure_time_hour": "integer (numerical) - Departure hour (0-23)",
+            "departure_time_minute": "integer (numerical) - Departure minute (0-59)",
+            "arrival_time_hour": "integer (numerical) - Arrival hour (0-23)",
+            "arrival_time_minute": "integer (numerical) - Arrival minute (0-59)",
+            "origin_country": "string (categorical) - ISO country code of origin (e.g., 'FR', 'ES')",
+            "destination_country": "string (categorical) - ISO country code of destination (e.g., 'GB', 'IT')",
+            "origin_departure_holidays": "string (categorical) - Holiday name at origin or 'None'",
+            "destination_departure_holidays": "string (categorical) - Holiday name at destination or 'None'",
+        },
+    }
 
 
 # ----- Main Entry Point -----

@@ -36,7 +36,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.app.port }}
+              containerPort: {{ .Values.appPort }}
               protocol: TCP
           envFrom:
             - configMapRef:
@@ -49,6 +49,10 @@ spec:
             - secretRef:
                 name: {{ include "visionary-serving.fullname" . }}-secrets
           {{- end }}
+          {{- end }}
+          {{- if .Values.s3.existingSecret }}
+            - secretRef:
+                name: {{ .Values.s3.existingSecret }}
           {{- end }}
           {{- if .Values.healthCheck.enabled }}
           livenessProbe:

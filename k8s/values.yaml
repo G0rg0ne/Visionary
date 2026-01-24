@@ -75,18 +75,8 @@ tolerations: []
 
 affinity: {}
 
-# Application-specific configuration
-app:
-  # Uvicorn settings
-  workers: 4
-  host: "0.0.0.0"
-  port: 8000
-  logLevel: "info"
-  
-  # MLflow settings
-  mlflowTrackingUri: "http://mlflow:5000"
-  modelName: "visionary_price_predictor"
-  modelStage: "Production"
+# Application port (used by deployment and health checks)
+appPort: 8000
 
 # Health check configuration
 healthCheck:
@@ -98,10 +88,28 @@ healthCheck:
   failureThreshold: 3
   successThreshold: 1
 
-# ConfigMap for environment variables
+# Environment variables for the application
 env:
+  # Python settings
   PYTHONUNBUFFERED: "1"
   PYTHONDONTWRITEBYTECODE: "1"
+  
+  # Uvicorn settings
+  UVICORN_WORKERS: "4"
+  UVICORN_HOST: "0.0.0.0"
+  UVICORN_PORT: "8000"
+  LOG_LEVEL: "info"
+  
+  # MLflow settings
+  MLFLOW_TRACKING_URI: "http://192.168.1.101:31933"
+  MODEL_NAME: "visionary-serving-prod"
+  MODEL_STAGE: "1"
+  
+  # MinIO/S3 endpoint for MLflow artifact storage
+  MLFLOW_S3_ENDPOINT_URL: "http://192.168.1.129:9001"
+  
+  # Model path (optional - if set, loads from path instead of MLflow registry)
+  # MODEL_PATH: "/models/catboost_model"
 
 # Secrets (reference existing secrets or create inline for dev)
 secrets:
@@ -111,3 +119,9 @@ secrets:
   inline: {}
     # MLFLOW_TRACKING_USERNAME: ""
     # MLFLOW_TRACKING_PASSWORD: ""
+
+# S3/MinIO credentials for MLflow artifact storage
+s3:
+  # Reference to existing Kubernetes secret containing S3 credentials
+  # The secret should have keys: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+  existingSecret: "mlflow-s3-creds"

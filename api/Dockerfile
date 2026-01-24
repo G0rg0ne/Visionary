@@ -29,20 +29,11 @@ LABEL maintainer="g0rg0ne"
 LABEL description="Visionary ML Model Serving API"
 LABEL version="1.0.0"
 
-# Set environment variables
+# Set environment variables (application config is injected via Helm)
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONFAULTHANDLER=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    # Application config
-    UVICORN_HOST="0.0.0.0" \
-    UVICORN_PORT="8000" \
-    UVICORN_WORKERS="4" \
-    LOG_LEVEL="info" \
-    # MLflow config
-    MLFLOW_TRACKING_URI="http://mlflow:5000" \
-    MODEL_NAME="visionary_price_predictor" \
-    MODEL_STAGE="Production"
+    PATH="/opt/venv/bin:$PATH"
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appgroup && \
