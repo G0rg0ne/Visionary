@@ -13,6 +13,8 @@ import shap
 import matplotlib.pyplot as plt
 import tempfile
 import os
+from dotenv import load_dotenv
+
 
 
 def log_shap_feature_importance(
@@ -83,6 +85,7 @@ def train_model(
         params: Dictionary containing model training parameters
     """
     # Identify target column (assuming 'price' is the target)
+    load_dotenv()
     target_col = "price"
 
     categorical_features = tickets_train_data.select_dtypes(include=["object", "string", "bool"]).columns.tolist()
@@ -125,11 +128,11 @@ def train_model(
     catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
     
     # Configure MLflow tracking server
-    mlflow.set_tracking_uri("http://192.168.1.101:30263")
+    mlflow.set_tracking_uri("http://192.168.1.101:31933")
     
     
     # Start MLflow experiment
-    mlflow.set_experiment("test2")
+    mlflow.set_experiment("visionary_price_prediction")
     
     with mlflow.start_run(description=params.get("run_description", "")):
         # Log parameters

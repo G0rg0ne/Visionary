@@ -7,7 +7,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Iterator, Tuple
 from loguru import logger
-
 class FigureGenerator:
     """
     Wrapper class to ensure generator always yields (key, figure) tuples.
