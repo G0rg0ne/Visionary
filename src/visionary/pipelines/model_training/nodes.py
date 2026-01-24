@@ -192,7 +192,7 @@ def train_model(
         })
         
         # Log model
-        mlflow.catboost.log_model(model, name="model")
+        mlflow.catboost.log_model(model, artifact_path="model")
         
         # Log feature importance
         feature_importance = pd.DataFrame({
