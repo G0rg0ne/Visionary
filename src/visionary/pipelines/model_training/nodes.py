@@ -124,8 +124,12 @@ def train_model(
     # Remove None values from params0
     catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
     
+    # Configure MLflow tracking server
+    mlflow.set_tracking_uri("http://192.168.1.101:30263")
+    
+    
     # Start MLflow experiment
-    mlflow.set_experiment("visionary_price_prediction")
+    mlflow.set_experiment("test2")
     
     with mlflow.start_run(description=params.get("run_description", "")):
         # Log parameters
