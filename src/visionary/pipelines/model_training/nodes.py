@@ -87,7 +87,7 @@ def train_model(
     # Identify target column (assuming 'price' is the target)
     load_dotenv()
     MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
-    
+
     target_col = "price"
 
     categorical_features = tickets_train_data.select_dtypes(include=["object", "string", "bool"]).columns.tolist()
@@ -123,7 +123,15 @@ def train_model(
         "random_state": params.get("random_state", 42),
         "loss_function": "RMSE",
         "verbose": False,
+        "grow_policy": "Lossguide",
+        "max_leaves": 64,
+        "bootstrap_type":"Bayesian",
+        "bagging_temperature": 0.7,
+        "random_strength": 1.5,
+        "iterations": 2500,
+        "learning_rate": 0.02,
         "cat_features": categorical_features if categorical_features else None,
+        "allow_writing_files": False,
     }
     
     # Remove None values from params0

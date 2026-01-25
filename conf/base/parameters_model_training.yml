@@ -7,5 +7,5 @@
 model_training_parameters:
   run_description: "Training  with baseline feature, adding cyclic features and overnight flight. Also handling departure_is_holiday_week feature"
   n_estimators: 100
-  max_depth: 10
+  max_depth: 8
   random_state: 42
