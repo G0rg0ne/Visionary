@@ -86,6 +86,8 @@ def train_model(
     """
     # Identify target column (assuming 'price' is the target)
     load_dotenv()
+    MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+    
     target_col = "price"
 
     categorical_features = tickets_train_data.select_dtypes(include=["object", "string", "bool"]).columns.tolist()
@@ -128,7 +130,7 @@ def train_model(
     catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
     
     # Configure MLflow tracking server
-    mlflow.set_tracking_uri("http://192.168.1.101:31933")
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     
     
     # Start MLflow experiment

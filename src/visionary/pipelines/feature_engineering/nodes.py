@@ -7,6 +7,10 @@ from loguru import logger
 from holidays import CountryHoliday
 from datetime import datetime
 
+import random
+random.seed(42)
+
+
 def fix_data_types(merged_data: pd.DataFrame) -> pd.DataFrame:
     merged_data['query_date'] = pd.to_datetime(merged_data['query_date'])
     merged_data['departure_date'] = pd.to_datetime(merged_data['departure_date'])

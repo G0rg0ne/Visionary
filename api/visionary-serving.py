@@ -10,7 +10,7 @@ from typing import List, Optional
 
 import mlflow.catboost
 import pandas as pd
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -269,6 +269,11 @@ async def root():
         "health": "/health",
         "predict": "/predict",
     }
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Handle favicon requests to prevent 404 errors in logs."""
+    return Response(status_code=204)
 
 
 @app.get(
