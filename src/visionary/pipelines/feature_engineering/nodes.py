@@ -73,31 +73,20 @@ def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd
     merged_data['origin_departure_holidays'] = merged_data.apply(lambda row: CountryHoliday(row['origin_country'], years=row['departure_date'].year).get(row['departure_date']), axis=1)
     merged_data['destination_departure_holidays'] = merged_data.apply(lambda row: CountryHoliday(row['destination_country'], years=row['departure_date'].year).get(row['departure_date']), axis=1)
     
-    def check_holiday_week(row):
-        """Check if departure date falls within a week containing a holiday."""
-        departure_date = row['departure_date']
-        year = departure_date.year
+    def check_holidays_next_7days(row,country_column):
+        """Check if destination country has a holiday in the next 7 days."""
+        departure_date = pd.to_datetime(row["departure_date"])
         
-        # Get all holidays for origin and destination countries for the year
-        origin_holidays = CountryHoliday(row['origin_country'], years=year)
-        dest_holidays = CountryHoliday(row['destination_country'], years=year)
-        
-        # Get the start of the week (Monday) and end of the week (Sunday)
-        # dayofweek: Monday=0, Sunday=6
-        days_from_monday = departure_date.dayofweek
-        week_start = (departure_date - pd.Timedelta(days=days_from_monday)).date()
-        week_end = (pd.Timestamp(week_start) + pd.Timedelta(days=6)).date()
-        
-        # Check if any holiday in origin or destination country falls within this week
-        for holiday_date in origin_holidays.keys():
-            if week_start <= holiday_date <= week_end:
-                return True
-        for holiday_date in dest_holidays.keys():
-            if week_start <= holiday_date <= week_end:
-                return True
-        return False
+        years = {departure_date.year, (departure_date + pd.Timedelta(days=7)).year}
+        holidays = CountryHoliday(row[country_column], years=years)
+
+        return any(
+            (departure_date + pd.Timedelta(days=j)) in holidays
+            for j in range(1, 8)  # next 7 days (excluding departure day)
+        )
     
-    merged_data['departure_is_holiday_week'] = merged_data.apply(check_holiday_week, axis=1)
+    merged_data['destination_is_holiday_next_7days'] = merged_data.apply(check_holidays_next_7days, country_column='destination_country', axis=1)
+    merged_data['origin_is_holiday_next_7days'] = merged_data.apply(check_holidays_next_7days, country_column='origin_country', axis=1)
     return merged_data
 
 def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:

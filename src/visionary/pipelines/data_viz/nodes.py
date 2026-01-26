@@ -38,7 +38,7 @@ class FigureGenerator:
             group_sorted = group.sort_values('days_before_departure')
             price_variation = group_sorted['price'].nunique() > 1
             # Skip groups with fewer than 4 data points
-            if len(group_sorted) < 6 or not price_variation:
+            if len(group_sorted) < 9 or not price_variation:
                 continue
             # Create a unique flight identifier for the dictionary key
             flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}_{airline}_{flight_duration}"
