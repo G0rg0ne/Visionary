@@ -8,6 +8,7 @@ from holidays import CountryHoliday
 from datetime import datetime
 import numpy as np
 import random
+import time
 random.seed(42)
 
 
@@ -17,9 +18,10 @@ def fix_data_types(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 def parse_custom_format(series, year_series):
-    # Format example: "5:35 PM on Thu, Jan 15" + " 2025"
-    # We append the year because Jan 15 exists in every year
-    combined_str = series + " " + year_series.astype(str)
+
+
+    year_str = year_series.astype(str).values
+    combined_str = series.values.astype('object') + " " + year_str
     return pd.to_datetime(combined_str, format='%I:%M %p on %a, %b %d %Y', errors='coerce')
 
 def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
@@ -29,29 +31,42 @@ def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     - day_of_week: Day of week as integer (0=Monday, 6=Sunday)
     - is_weekend: Boolean indicating if departure is on weekend (Saturday or Sunday)
     """
-    merged_data['departure_day_of_week'] = merged_data['departure_date'].dt.dayofweek
-    merged_data['departure_is_weekend'] = merged_data['departure_date'].dt.dayofweek.isin([5, 6])
-    merged_data['departure_week_of_year'] = merged_data['departure_date'].dt.isocalendar().week
-    merged_data['departure_month'] = merged_data['departure_date'].dt.month
+    # Cache datetime accessors to avoid repeated computations
+    departure_dt = merged_data['departure_date'].dt
+    
+    merged_data['departure_day_of_week'] = departure_dt.dayofweek
+    merged_data['departure_is_weekend'] = merged_data['departure_day_of_week'].isin([5, 6])
+    merged_data['departure_week_of_year'] = departure_dt.isocalendar().week
+    merged_data['departure_month'] = departure_dt.month
 
+    # Vectorized cyclic encoding
     merged_data['cyclic_departure_day_of_week'] = np.sin(2 * np.pi * merged_data['departure_day_of_week'] / 7)
     merged_data['cyclic_departure_week_of_year'] = np.sin(2 * np.pi * merged_data['departure_week_of_year'] / 52)
     merged_data['cyclic_departure_month'] = np.sin(2 * np.pi * merged_data['departure_month'] / 12)
 
-    #parse text defined time to datetime
-    merged_data['departure_time_dt'] = parse_custom_format(merged_data['departure_time'], merged_data['departure_date'].dt.year)
-    merged_data['arrival_time_dt'] = parse_custom_format(merged_data['arrival_time'], merged_data['departure_date'].dt.year)
+    # Parse text defined time to datetime
+    departure_year = departure_dt.year
+    merged_data['departure_time_dt'] = parse_custom_format(merged_data['departure_time'], departure_year)
+    merged_data['arrival_time_dt'] = parse_custom_format(merged_data['arrival_time'], departure_year)
     
-
-    for col in ['departure_time_dt', 'arrival_time_dt']:
-        prefix = col.replace('_dt', '')
-        merged_data[f'{prefix}_day'] = merged_data[col].dt.day
-        merged_data[f'{prefix}_month'] = merged_data[col].dt.month
-        merged_data[f'{prefix}_hour'] = merged_data[col].dt.hour
-        merged_data[f'{prefix}_minute'] = merged_data[col].dt.minute
-
-    merged_data["overnight_flight"] = merged_data['departure_time_dt'].dt.date < merged_data['arrival_time_dt'].dt.date
+    # Vectorized time feature extraction
+    departure_time_dt = merged_data['departure_time_dt'].dt
+    arrival_time_dt = merged_data['arrival_time_dt'].dt
     
+    merged_data['departure_time_day'] = departure_time_dt.day
+    merged_data['departure_time_month'] = departure_time_dt.month
+    merged_data['departure_time_hour'] = departure_time_dt.hour
+    merged_data['departure_time_minute'] = departure_time_dt.minute
+    
+    merged_data['arrival_time_day'] = arrival_time_dt.day
+    merged_data['arrival_time_month'] = arrival_time_dt.month
+    merged_data['arrival_time_hour'] = arrival_time_dt.hour
+    merged_data['arrival_time_minute'] = arrival_time_dt.minute
+
+    # Use vectorized comparison
+    merged_data["overnight_flight"] = departure_time_dt.date < arrival_time_dt.date
+    
+    # Vectorized cyclic encoding for time features
     merged_data['cyclic_departure_time_hour'] = np.sin(2 * np.pi * merged_data['departure_time_hour'] / 24)
     merged_data['cyclic_departure_time_minute'] = np.sin(2 * np.pi * merged_data['departure_time_minute'] / 60)
     merged_data['cyclic_arrival_time_hour'] = np.sin(2 * np.pi * merged_data['arrival_time_hour'] / 24)
@@ -68,25 +83,113 @@ def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
+    """Optimized holiday feature engineering using pre-computed holiday sets."""
+    
     merged_data['origin_country'] = merged_data['origin'].map(airport_country_mapping)
     merged_data['destination_country'] = merged_data['destination'].map(airport_country_mapping)
-    merged_data['origin_departure_holidays'] = merged_data.apply(lambda row: CountryHoliday(row['origin_country'], years=row['departure_date'].year).get(row['departure_date']), axis=1)
-    merged_data['destination_departure_holidays'] = merged_data.apply(lambda row: CountryHoliday(row['destination_country'], years=row['departure_date'].year).get(row['departure_date']), axis=1)
     
-    def check_holidays_next_7days(row,country_column):
-        """Check if destination country has a holiday in the next 7 days."""
-        departure_date = pd.to_datetime(row["departure_date"])
+    # Pre-compute all unique countries and years to minimize CountryHoliday object creation
+    unique_countries = set(merged_data['origin_country'].dropna().unique()) | set(merged_data['destination_country'].dropna().unique())
+    unique_years = set(merged_data['departure_date'].dt.year.unique())
+    
+    logger.info(f"Pre-computing holidays for {len(unique_countries)} countries and {len(unique_years)} years...")
+    
+    # Create a dictionary of holiday sets for each country-year combination
+    holiday_cache = {}
+    for country in unique_countries:
+        if pd.isna(country) or country == 'None':
+            continue
+        for year in unique_years:
+            try:
+                holidays = CountryHoliday(country, years=year)
+                holiday_cache[(country, year)] = set(holidays.keys())
+            except Exception as e:
+                logger.warning(f"Could not load holidays for {country} in {year}: {e}")
+                holiday_cache[(country, year)] = set()
+    
+    # Vectorized holiday checking function
+    def get_holiday_name_vectorized(dates, countries):
+        """Get holiday names for dates and countries using pre-computed cache."""
+        result = []
+        for date, country in zip(dates, countries):
+            if pd.isna(date) or pd.isna(country) or country == 'None':
+                result.append(None)
+                continue
+            year = pd.Timestamp(date).year
+            holidays_set = holiday_cache.get((country, year), set())
+            
+            # Check if date is in holidays
+            date_only = date.date() if hasattr(date, 'date') else date
+            if date_only in holidays_set:
+                # Get the actual holiday name
+                try:
+                    holiday_obj = CountryHoliday(country, years=year)
+                    result.append(holiday_obj.get(date_only))
+                except:
+                    result.append('Holiday')
+            else:
+                result.append(None)
         
-        years = {departure_date.year, (departure_date + pd.Timedelta(days=7)).year}
-        holidays = CountryHoliday(row[country_column], years=years)
-
-        return any(
-            (departure_date + pd.Timedelta(days=j)) in holidays
-            for j in range(1, 8)  # next 7 days (excluding departure day)
-        )
+        return result
     
-    merged_data['destination_is_holiday_next_7days'] = merged_data.apply(check_holidays_next_7days, country_column='destination_country', axis=1)
-    merged_data['origin_is_holiday_next_7days'] = merged_data.apply(check_holidays_next_7days, country_column='origin_country', axis=1)
+    def check_holiday_in_next_7days_vectorized(dates, countries):
+        """Check if there's a holiday in next 7 days using pre-computed cache."""
+        result = []
+        for date, country in zip(dates, countries):
+            if pd.isna(date) or pd.isna(country) or country == 'None':
+                result.append(False)
+                continue
+            
+            year = pd.Timestamp(date).year
+            next_date = date + pd.Timedelta(days=7)
+            
+            # Get holidays for current year and next year if crossing boundary
+            years_needed = {year}
+            if next_date.year != year:
+                years_needed.add(next_date.year)
+            
+            # Combine all relevant holidays
+            all_holidays = set()
+            for y in years_needed:
+                all_holidays.update(holiday_cache.get((country, y), set()))
+            
+            # Check each of the next 7 days
+            has_holiday = False
+            for j in range(1, 8):
+                check_date = (date + pd.Timedelta(days=j)).date()
+                if check_date in all_holidays:
+                    has_holiday = True
+                    break
+            
+            result.append(has_holiday)
+        
+        return result
+    
+    logger.info("Computing holiday features...")
+    
+    # Apply vectorized functions
+    merged_data['origin_departure_holidays'] = get_holiday_name_vectorized(
+        merged_data['departure_date'].values, 
+        merged_data['origin_country'].values
+    )
+    
+    merged_data['destination_departure_holidays'] = get_holiday_name_vectorized(
+        merged_data['departure_date'].values, 
+        merged_data['destination_country'].values
+    )
+    
+    merged_data['origin_is_holiday_next_7days'] = check_holiday_in_next_7days_vectorized(
+        merged_data['departure_date'].values,
+        merged_data['origin_country'].values
+    )
+    
+    merged_data['destination_is_holiday_next_7days'] = check_holiday_in_next_7days_vectorized(
+        merged_data['departure_date'].values,
+        merged_data['destination_country'].values
+    )
+    
+    logger.info("Holiday features computed successfully")
+    
     return merged_data
 
 def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
@@ -97,10 +200,27 @@ def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
+    logger.info(f"Starting feature engineering for {len(merged_data)} rows")
+    start_time = time.time()
+    
+    step_start = time.time()
     merged_data = fix_data_types(merged_data)
+    logger.info(f"✓ fix_data_types completed in {time.time() - step_start:.2f}s")
+    
+    step_start = time.time()
     merged_data = add_temporal_features(merged_data)
+    logger.info(f"✓ add_temporal_features completed in {time.time() - step_start:.2f}s")
+    
+    step_start = time.time()
     merged_data = add_holidays(merged_data, airport_country_mapping)
+    logger.info(f"✓ add_holidays completed in {time.time() - step_start:.2f}s")
+    
+    step_start = time.time()
     merged_data = handle_categorical_features(merged_data)
+    logger.info(f"✓ handle_categorical_features completed in {time.time() - step_start:.2f}s")
+    
+    total_time = time.time() - start_time
+    logger.info(f"Feature engineering completed in {total_time:.2f}s ({len(merged_data)/total_time:.0f} rows/sec)")
 
     return merged_data
 
