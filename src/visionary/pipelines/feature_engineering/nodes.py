@@ -9,6 +9,7 @@ from datetime import datetime
 import numpy as np
 import random
 import time
+from haversine import haversine
 random.seed(42)
 
 
@@ -214,7 +215,21 @@ def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict
     return merged_data
 
 ################## data augmentation ##################
+def compute_distance_between_airports(od_pairs: set, airport_data: pd.DataFrame) -> dict:
+    distance_dict = {}
+    for od_pair in od_pairs:
+        origin, destination = od_pair
+        origin_lat, origin_long = airport_data.loc[airport_data["IATA"] == origin, ["Lat", "Long"]].values[0]
+        destination_lat, destination_long = airport_data.loc[airport_data["IATA"] == destination, ["Lat", "Long"]].values[0]
+        distance = haversine((origin_lat, origin_long), (destination_lat, destination_long))
+        distance_dict[od_pair] = distance
+    return distance_dict
 def data_augmentation(merged_data: pd.DataFrame, airport_data: pd.DataFrame) -> pd.DataFrame:
+    merged_data["od_pairs"] = list(zip(merged_data["origin"], merged_data["destination"]))
+    od_pairs = set(merged_data["od_pairs"])
+    result_dict = compute_distance_between_airports(od_pairs,airport_data)
+    merged_data["airports_distance"] = merged_data["od_pairs"].map(result_dict)
+    merged_data = merged_data.drop(columns=["od_pairs"])
     import pdb;pdb.set_trace()
     return merged_data
 
