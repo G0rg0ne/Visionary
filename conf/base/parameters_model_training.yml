@@ -5,7 +5,7 @@
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
 model_training_parameters:
-  run_description: "Training  with baseline latest dataset, features v1: Cyclic encoding and overnight flight"
+  run_description: "Training  with baseline hyperparameters, features v2: add airports distance"
   n_estimators: 100
   max_depth: 8
   random_state: 42
