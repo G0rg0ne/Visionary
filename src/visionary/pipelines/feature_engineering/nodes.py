@@ -40,9 +40,12 @@ def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     merged_data['departure_month'] = departure_dt.month
 
     # Vectorized cyclic encoding
-    merged_data['cyclic_departure_day_of_week'] = np.sin(2 * np.pi * merged_data['departure_day_of_week'] / 7)
-    merged_data['cyclic_departure_week_of_year'] = np.sin(2 * np.pi * merged_data['departure_week_of_year'] / 52)
-    merged_data['cyclic_departure_month'] = np.sin(2 * np.pi * merged_data['departure_month'] / 12)
+    merged_data['cyclic_sin_departure_day_of_week'] = np.sin(2 * np.pi * merged_data['departure_day_of_week'] / 7)
+    merged_data['cyclic_cos_departure_day_of_week'] = np.cos(2 * np.pi * merged_data['departure_day_of_week'] / 7)
+    merged_data['cyclic_sin_departure_week_of_year'] = np.sin(2 * np.pi * merged_data['departure_week_of_year'] / 52)
+    merged_data['cyclic_cos_departure_week_of_year'] = np.cos(2 * np.pi * merged_data['departure_week_of_year'] / 52)
+    merged_data['cyclic_sin_departure_month'] = np.sin(2 * np.pi * merged_data['departure_month'] / 12)
+    merged_data['cyclic_cos_departure_month'] = np.cos(2 * np.pi * merged_data['departure_month'] / 12)
 
     # Parse text defined time to datetime
     departure_year = departure_dt.year
@@ -67,12 +70,15 @@ def add_temporal_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     merged_data["overnight_flight"] = departure_time_dt.date < arrival_time_dt.date
     
     # Vectorized cyclic encoding for time features
-    merged_data['cyclic_departure_time_hour'] = np.sin(2 * np.pi * merged_data['departure_time_hour'] / 24)
-    merged_data['cyclic_departure_time_minute'] = np.sin(2 * np.pi * merged_data['departure_time_minute'] / 60)
-    merged_data['cyclic_arrival_time_hour'] = np.sin(2 * np.pi * merged_data['arrival_time_hour'] / 24)
-    merged_data['cyclic_arrival_time_minute'] = np.sin(2 * np.pi * merged_data['arrival_time_minute'] / 60)
+    merged_data['cyclic_sin_departure_time_hour'] = np.sin(2 * np.pi * merged_data['departure_time_hour'] / 24)
+    merged_data['cyclic_cos_departure_time_hour'] = np.cos(2 * np.pi * merged_data['departure_time_hour'] / 24)
+    merged_data['cyclic_sin_departure_time_minute'] = np.sin(2 * np.pi * merged_data['departure_time_minute'] / 60)
+    merged_data['cyclic_cos_departure_time_minute'] = np.cos(2 * np.pi * merged_data['departure_time_minute'] / 60)
+    merged_data['cyclic_sin_arrival_time_hour'] = np.sin(2 * np.pi * merged_data['arrival_time_hour'] / 24)
+    merged_data['cyclic_cos_arrival_time_hour'] = np.cos(2 * np.pi * merged_data['arrival_time_hour'] / 24)
+    merged_data['cyclic_sin_arrival_time_minute'] = np.sin(2 * np.pi * merged_data['arrival_time_minute'] / 60)
+    merged_data['cyclic_cos_arrival_time_minute'] = np.cos(2 * np.pi * merged_data['arrival_time_minute'] / 60)
     
-
     return merged_data
 
 def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
@@ -199,31 +205,20 @@ def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
         merged_data[col] = merged_data[col].replace('', None).fillna('None').astype(str)
     return merged_data
 
-def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
-    logger.info(f"Starting feature engineering for {len(merged_data)} rows")
-    start_time = time.time()
-    
-    step_start = time.time()
-    merged_data = fix_data_types(merged_data)
-    logger.info(f"✓ fix_data_types completed in {time.time() - step_start:.2f}s")
-    
-    step_start = time.time()
-    merged_data = add_temporal_features(merged_data)
-    logger.info(f"✓ add_temporal_features completed in {time.time() - step_start:.2f}s")
-    
-    step_start = time.time()
-    merged_data = add_holidays(merged_data, airport_country_mapping)
-    logger.info(f"✓ add_holidays completed in {time.time() - step_start:.2f}s")
-    
-    step_start = time.time()
-    merged_data = handle_categorical_features(merged_data)
-    logger.info(f"✓ handle_categorical_features completed in {time.time() - step_start:.2f}s")
-    
-    total_time = time.time() - start_time
-    logger.info(f"Feature engineering completed in {total_time:.2f}s ({len(merged_data)/total_time:.0f} rows/sec)")
 
+def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
+    merged_data = fix_data_types(merged_data)
+    merged_data = add_temporal_features(merged_data)
+    merged_data = add_holidays(merged_data, airport_country_mapping)
+    merged_data = handle_categorical_features(merged_data)
     return merged_data
 
+################## data augmentation ##################
+def data_augmentation(merged_data: pd.DataFrame, airport_data: pd.DataFrame) -> pd.DataFrame:
+    import pdb;pdb.set_trace()
+    return merged_data
+
+##################### split data #####################
 def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
     
     merged_data = merged_data.sort_values('query_date').reset_index(drop=True)
