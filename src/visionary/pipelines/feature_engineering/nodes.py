@@ -230,7 +230,6 @@ def data_augmentation(merged_data: pd.DataFrame, airport_data: pd.DataFrame) -> 
     result_dict = compute_distance_between_airports(od_pairs,airport_data)
     merged_data["airports_distance"] = merged_data["od_pairs"].map(result_dict)
     merged_data = merged_data.drop(columns=["od_pairs"])
-    import pdb;pdb.set_trace()
     return merged_data
 
 ##################### split data #####################
