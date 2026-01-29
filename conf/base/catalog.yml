@@ -39,5 +39,5 @@ tickets_test_data:
   filepath: data/04_feature/tickets_test_data.csv
 
 airport_data:
-  type: pandas.CSVDataset
+  type: visionary.datasets.dat_dataset.dat_airport_dataset
   filepath: data/03_primary/airports.dat
