@@ -16,7 +16,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             Node(
                 feature_engineering,
-                inputs=["merged_data", "params:airport_country_mapping"],
+                inputs=["sampled_dataset", "params:airport_country_mapping"],
                 outputs="merged_data_with_holidays",
                 name="feature_engineering",
             ),

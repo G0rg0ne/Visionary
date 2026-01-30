@@ -25,9 +25,6 @@ def register_pipelines() -> dict[str, Pipeline]:
     model_training_pipeline = model_training_pipe.create_pipeline()
 
     #create the ML pipeline
-    #feature_engineering_pipeline = feature_engineering_pipe.create_pipeline()
-    #model_training_pipeline = model_training_pipe.create_pipeline()
-    #training_pipeline =    model_training_pipeline + feature_engineering_pipeline
     return {
         "__default__": sum(pipelines.values()),
         "ingestion_pipeline": data_ingestion_pipeline,
