@@ -13,7 +13,7 @@ def create_pipeline(**kwargs) -> Pipeline:
     return Pipeline([
         Node(
             plot_ticket_evolution,
-            inputs="merged_data",
+            inputs="sampled_dataset",
             outputs="ticket_evolution",
             name="plot_ticket_evolution"
         ),
