@@ -57,26 +57,32 @@ Take a look at the [Kedro documentation](https://docs.kedro.org) to get started.
 
 During development, we use **Kedro Viz** to visualize the data pipelines and see how data flows between nodes.
 
-![Kedro Viz Pipeline Visualization](assets/kedro-pipeline.png)
+![Kedro Viz Pipeline Visualization](assets/kedro-pipeline_F.png)
 
 Kedro Viz shows data flow, node outputs, and dependencies at each stage, which helps with iteration and clarity.
 
 ### MLflow integration
 
-The project uses **MLflow** for experiment tracking, model versioning, and artifacts. MLflow logs:
+The project uses **MLflow** for experiment tracking, model versioning, and artifacts. MLflow is deployed on a **local cluster using [Argo](https://argoproj.github.io/)** — see My [MLFlow repository](https://github.com/G0rg0ne/Homelab-MLFlow) for deployment and setup details.
+
+MLflow logs:
 
 - **Model parameters**: CatBoost configuration and hyperparameters
 - **Metrics**: RMSE, MAE, R² on train and test sets
 - **Artifacts**: Feature importance tables, SHAP importance plots
 - **Models**: Trained CatBoost models for versioning and deployment
 
-**View experiments:**
 
-```bash
-mlflow ui
-```
+#### Latest trained model metrics
 
-Then open `http://localhost:5000` to compare runs and view artifacts.
+| Metric     | Value                |
+|-----------|----------------------|
+| train_mae | 5.753399975915274    |
+| train_rmse | 8.992907262767996   |
+| train_r2  | 0.9571544880933338   |
+| test_mae  | 10.16852308273875    |
+| test_rmse | 16.642593496581295   |
+| test_r2   | 0.8962768395836301   |
 
 ### Rules and guidelines
 
@@ -146,7 +152,6 @@ To exit: `deactivate`.
 
 ---
 
-## Data science at a glance
 
 ### Goal
 
