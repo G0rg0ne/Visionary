@@ -4,162 +4,160 @@
 
 ## Overview
 
-This is your new Kedro project, which was generated using `kedro 1.1.1`.
+This is a Kedro project for **flight ticket price prediction**. It was generated with Kedro 1.1.1.
 
 Take a look at the [Kedro documentation](https://docs.kedro.org) to get started.
-## Development Process and Kedro Viz Output
 
-During development, we visualize our data pipelines using **Kedro Viz**, which provides a clear and interactive overview of data workflows.
+---
 
-Below is a screenshot of the Kedro Viz output for this project:
+## Kedro: What it is and how to run the project
+
+**Kedro** is a framework for building reproducible, maintainable data and ML pipelines. In this project it is used to orchestrate data ingestion, preparation, visualization, feature engineering, and model training in a single workflow.
+
+### How to run the project
+
+1. **Install dependencies** (using the project’s preferred setup):
+
+   ```bash
+   uv venv
+   source .venv/bin/activate   # macOS / Linux
+   .\.venv\Scripts\activate    # Windows
+   uv sync
+   ```
+
+   Or with pip:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run the full pipeline** (all stages):
+
+   ```bash
+   kedro run
+   ```
+
+3. **Run a single pipeline** (optional):
+
+   ```bash
+   kedro run --pipeline ingestion_pipeline
+   kedro run --pipeline fusion_pipeline
+   kedro run --pipeline viz_pipeline
+   kedro run --pipeline fe_pipeline
+   kedro run --pipeline training_pipeline
+   ```
+
+4. **Inspect the pipeline** with Kedro Viz:
+
+   ```bash
+   kedro viz
+   ```
+
+### Development and Kedro Viz
+
+During development, we use **Kedro Viz** to visualize the data pipelines and see how data flows between nodes.
 
 ![Kedro Viz Pipeline Visualization](assets/kedro-pipeline.png)
 
-*Kedro Viz* helps showcase the data flow, node outputs, and dependencies at each stage of the pipeline, facilitating rapid iteration and improving clarity during the development process.
+Kedro Viz shows data flow, node outputs, and dependencies at each stage, which helps with iteration and clarity.
 
-## MLflow Integration
+### MLflow integration
 
-This project uses **MLflow** for experiment tracking, model versioning, and artifact management. MLflow automatically logs:
+The project uses **MLflow** for experiment tracking, model versioning, and artifacts. MLflow logs:
 
-- **Model parameters**: Prophet model configuration and hyperparameters
-- **Metrics**: Evaluation metrics including RMSE, MAE, R², and MAPE on the test set
-- **Artifacts**: Forecast visualization graphs showing predicted vs actual values
-- **Models**: Trained Prophet models for versioning and deployment
+- **Model parameters**: CatBoost configuration and hyperparameters
+- **Metrics**: RMSE, MAE, R² on train and test sets
+- **Artifacts**: Feature importance tables, SHAP importance plots
+- **Models**: Trained CatBoost models for versioning and deployment
 
-### Forecast Visualization
+**View experiments:**
 
-The MLflow artifact graph displays the model's predictions on the test set, comparing actual sales values with predicted values. The visualization includes:
-
-- **Forecast vs Actual Sales**: A comparison plot showing actual sales (blue) and predicted sales (red) with confidence intervals
-- **Residuals Plot**: Analysis of prediction errors over time
-
-Below is a screenshot of the MLflow artifact graph showing the predicted values in the test set:
-
-![MLflow Forecast Graph](assets/newplot.png)
-
-*The forecast graph visualizes the model's performance on the test set, helping to assess prediction accuracy and identify patterns in residuals.*
-
-### Accessing MLflow UI
-
-To view MLflow experiments and artifacts, start the MLflow UI:
-
-```
+```bash
 mlflow ui
 ```
 
-Then navigate to `http://localhost:5000` in your browser to explore experiments, compare runs, and view artifacts.
+Then open `http://localhost:5000` to compare runs and view artifacts.
 
-## Rules and guidelines
+### Rules and guidelines
 
-In order to get the best out of the template:
+- Don’t remove lines from the provided `.gitignore`
+- Keep results reproducible (data engineering conventions)
+- Don’t commit data to the repository
+- Don’t commit credentials or local config; keep them in `conf/local/`
 
-* Don't remove any lines from the `.gitignore` file we provide
-* Make sure your results can be reproduced by following a data engineering convention
-* Don't commit data to your repository
-* Don't commit any credentials or your local configuration to your repository. Keep all your credentials and local configuration in `conf/local/`
+### How to test the project
 
-## How to install dependencies
+Run tests with:
 
-Declare any dependencies in `requirements.txt` for `pip` installation.
-
-To install them, run:
-
-```
-pip install -r requirements.txt
-```
-
-## How to run your Kedro pipeline
-
-You can run your Kedro project with:
-
-```
-kedro run
-```
-
-## How to test your Kedro project
-
-Have a look at the file `tests/test_run.py` for instructions on how to write your tests. You can run your tests as follows:
-
-```
+```bash
 pytest
 ```
 
-You can configure the coverage threshold in your project's `pyproject.toml` file under the `[tool.coverage.report]` section.
+Coverage can be configured in `pyproject.toml` under `[tool.coverage.report]`.
 
+### Project dependencies
 
-## Project dependencies
-
-To see and update the dependency requirements for your project use `requirements.txt`. You can install the project requirements with `pip install -r requirements.txt`.
+Dependencies are declared in `pyproject.toml` / `requirements.txt`. Install with `uv sync` or `pip install -r requirements.txt`.
 
 [Further information about project dependencies](https://docs.kedro.org/en/stable/kedro_project_setup/dependencies.html#project-specific-dependencies)
 
-## How to work with Kedro and notebooks
+### Working with Kedro and notebooks
 
-> Note: Using `kedro jupyter` or `kedro ipython` to run your notebook provides these variables in scope: `context`, 'session', `catalog`, and `pipelines`.
->
-> Jupyter, JupyterLab, and IPython are already included in the project requirements by default, so once you have run `pip install -r requirements.txt` you will not need to take any extra steps before you use them.
+Using `kedro jupyter` or `kedro ipython` gives you `context`, `session`, `catalog`, and `pipelines` in scope.
 
-### Jupyter
-To use Jupyter notebooks in your Kedro project, you need to install Jupyter:
+**Jupyter:**
 
-```
+```bash
 pip install jupyter
-```
-
-After installing Jupyter, you can start a local notebook server:
-
-```
 kedro jupyter notebook
 ```
 
-### JupyterLab
-To use JupyterLab, you need to install it:
+**JupyterLab:**
 
-```
+```bash
 pip install jupyterlab
-```
-
-You can also start JupyterLab:
-
-```
 kedro jupyter lab
 ```
 
-### IPython
-And if you want to run an IPython session:
+**IPython:**
 
-```
+```bash
 kedro ipython
 ```
 
-### How to ignore notebook output cells in `git`
-To automatically strip out all output cell contents before committing to `git`, you can use tools like [`nbstripout`](https://github.com/kynan/nbstripout). For example, you can add a hook in `.git/config` with `nbstripout --install`. This will run `nbstripout` before anything is committed to `git`.
+To avoid committing notebook outputs to git, you can use e.g. [nbstripout](https://github.com/kynan/nbstripout) (e.g. `nbstripout --install` in `.git/config`). Outputs remain locally.
 
-> *Note:* Your output cells will be retained locally.
+### Packaging the project
 
-## Package your Kedro project
+[Further information about building documentation and packaging](https://docs.kedro.org/en/stable/tutorial/package_a_project.html)
 
-[Further information about building project documentation and packaging your project](https://docs.kedro.org/en/stable/tutorial/package_a_project.html)
+### Virtual environment with uv
 
+You can use **uv** to manage the virtual environment:
 
-#################
-
-uv is also capable of creating virtual environments.
-
-First, navigate to where your project is:
-
-
+```bash
 cd your-kedro-project
-Next, create a new virtual environment inside the .venv subdirectory:
-
-
 uv venv
-Activate this virtual environment:
+source .venv/bin/activate   # macOS / Linux
+.\.venv\Scripts\activate    # Windows
+```
 
+To exit: `deactivate`.
 
-source .venv/bin/activate # macOS / Linux
-.\.venv\Scripts\activate  # Windows
-To exit the environment:
+---
 
+## Data science at a glance
 
-deactivate
+### Goal
+
+**Predict flight ticket prices** (regression). The pipeline takes raw ticket/price data, cleans and enriches it, builds features, and trains a **CatBoost** model to forecast price. The aim is to support price monitoring or decision support, not to replace airline pricing systems.
+
+### Pipeline stages (high level)
+
+1. **Data ingestion** – Load CSV files from MinIO (or similar S3-compatible storage) and combine them into a single raw dataset.
+2. **Data preparation** – Merge all raw CSVs, then filter to keep only flights that have enough observations (e.g. minimum number of price points per route/date/time) so the rest of the pipeline works on meaningful series.
+3. **Data visualization** – Produce price evolution plots: for each distinct flight (route, date, time, airline), plot price vs. “days before departure” to inspect how prices change as the departure date approaches.
+4. **Feature engineering** – Add temporal and calendar features (e.g. day of week, weekend, month, cyclic encodings), holiday flags for origin/destination countries, and augment with airport distance (e.g. haversine). Then split the data **chronologically** (e.g. 80% train / 20% test) so the model is evaluated on future time periods.
+5. **Model training** – Train a **CatBoost** regressor to predict **price** from the engineered features. Metrics (e.g. RMSE, MAE, R²) and artifacts (feature importance, SHAP plots) are logged to MLflow for comparison and model selection.
+
+End-to-end: **raw data → merged & filtered → visualizations → features → train/test split → CatBoost model**, with MLflow used for tracking and versioning.
