@@ -15,6 +15,10 @@ merged_data:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/merged_data.csv
 
+sampled_dataset:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/sampled_dataset.csv
+
 ########################################## DATA VISUALIZATION ##########################################
 ticket_evolution: 
   type: visionary.datasets.generator_figure_dataset.GeneratorFigureDataset
