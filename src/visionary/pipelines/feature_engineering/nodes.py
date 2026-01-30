@@ -10,8 +10,8 @@ import numpy as np
 import random
 import time
 from haversine import haversine
-random.seed(42)
 
+random.seed(42)
 
 def fix_data_types(merged_data: pd.DataFrame) -> pd.DataFrame:
     merged_data['query_date'] = pd.to_datetime(merged_data['query_date'])
@@ -19,8 +19,6 @@ def fix_data_types(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 def parse_custom_format(series, year_series):
-
-
     year_str = year_series.astype(str).values
     combined_str = series.values.astype('object') + " " + year_str
     return pd.to_datetime(combined_str, format='%I:%M %p on %a, %b %d %Y', errors='coerce')
@@ -259,5 +257,3 @@ def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
     test_data = test_data.drop(columns=cols_to_drop)
     
     return train_data, test_data
-
-
