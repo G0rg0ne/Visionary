@@ -13,3 +13,13 @@ model_training_parameters:
   log_to_mlflow: true
   # Optional: multi_output_horizon. If omitted, target columns (price_1, price_2, ...) are inferred from data.
   multi_output_horizon: null
+  # Number of sample "test flight" plots (prediction vs ground truth) to log under MLflow artifacts test_flights/
+  test_flights_n_samples: 5
+  # Columns defining a unique flight for test_flights plots (only columns present in test data are used)
+  unique_flights_def_columns:
+    - origin
+    - destination
+    - departure_date
+    - departure_time
+    - airline
+    - flight_duration

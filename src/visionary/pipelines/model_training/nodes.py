@@ -102,6 +102,114 @@ def log_shap_feature_importance(
     logger.info("SHAP feature importance plot logged to MLflow")
 
 
+# Columns that define a unique flight (group-by); only columns present in the data are used.
+UNIQUE_FLIGHTS_DEF_COLUMNS = [
+    "origin",
+    "destination",
+    "departure_date",
+    "departure_time",
+    "airline",
+    "flight_duration",
+]
+
+
+def log_test_flights_plots(
+    y_test: pd.DataFrame,
+    y_test_pred: np.ndarray,
+    X_test: pd.DataFrame,
+    target_cols: List[str],
+    params: Dict[str, Any],
+    n_samples: int = 5,
+    unique_flights_def_columns: List[str] | None = None,
+) -> None:
+    """
+    Create N sample line plots, one per unique flight in the test set: today's price +
+    ground truth vs predicted future prices. Log each plot under MLflow artifact path "test_flights/".
+
+    Flights are identified by grouping on unique_flights_def_columns (only columns present
+    in X_test are used). One row per unique flight is plotted.
+
+    Green line = ground truth (today + price_1..price_H).
+    Blue line = prediction (today + pred_1..pred_H).
+
+    Args:
+        y_test: Test targets (price_1, price_2, ...)
+        y_test_pred: Model predictions, shape (n_samples, horizon)
+        X_test: Test features (must contain 'todays_price')
+        target_cols: List of target column names in order
+        params: Parameters dict (for random_state)
+        n_samples: Number of unique flights to plot
+        unique_flights_def_columns: Columns defining a unique flight for group-by; default from constant.
+    """
+    if "todays_price" not in X_test.columns:
+        logger.warning("todays_price not in X_test, skipping test_flights plots")
+        return
+    horizon = len(target_cols)
+    n_available = len(y_test)
+    if n_available == 0:
+        logger.warning("No test samples for test_flights plots")
+        return
+
+    key_cols = unique_flights_def_columns or UNIQUE_FLIGHTS_DEF_COLUMNS
+    flight_key_cols = [c for c in key_cols if c in X_test.columns]
+    if not flight_key_cols:
+        flight_key_cols = ["origin", "destination", "airline", "flight_duration"]
+        flight_key_cols = [c for c in flight_key_cols if c in X_test.columns]
+    if not flight_key_cols:
+        logger.warning("No flight key columns in X_test, sampling random rows for test_flights")
+        flight_key_cols = None
+
+    rng = np.random.default_rng(params.get("random_state", 42))
+    if flight_key_cols:
+        # One row per unique flight: group by flight keys and take one index per group
+        combined = X_test[flight_key_cols].copy()
+        combined["_idx"] = np.arange(len(combined))
+        first_per_flight = combined.groupby(flight_key_cols, dropna=False)["_idx"].first()
+        unique_indices = first_per_flight.values
+        n_samples = min(n_samples, len(unique_indices))
+        chosen_positions = rng.choice(len(unique_indices), size=n_samples, replace=False)
+        indices = unique_indices[chosen_positions]
+    else:
+        n_samples = min(n_samples, n_available)
+        indices = rng.choice(n_available, size=n_samples, replace=False)
+
+    # x: 0 = today, 1..horizon = day 1..H
+    x_points = np.arange(0, horizon + 1)
+
+    for i, idx in enumerate(indices):
+        today_price = float(X_test["todays_price"].iloc[idx])
+        gt_row = y_test.iloc[idx]
+        gt_prices = [today_price] + [float(gt_row[col]) for col in target_cols]
+        pred_row = y_test_pred[idx]
+        pred_prices = [today_price] + [float(pred_row[j]) for j in range(horizon)]
+
+        title = f"Test flight {i + 1}: Price today and next {horizon} days"
+        if flight_key_cols:
+            row = X_test.iloc[idx]
+            parts = [str(row[c]) for c in flight_key_cols]
+            flight_id = " | ".join(parts)
+            title = f"{title}\n{flight_id}"
+
+        plt.figure(figsize=(8, 5))
+        plt.plot(x_points, gt_prices, color="green", linewidth=2, label="Ground truth")
+        plt.plot(x_points, pred_prices, color="blue", linewidth=2, label="Prediction")
+        plt.xlabel("Day (0 = today)")
+        plt.ylabel("Price")
+        plt.title(title)
+        plt.legend()
+        plt.xticks(x_points)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, f"sample_{i}.png")
+            plt.savefig(path, dpi=150, bbox_inches="tight")
+            mlflow.log_artifact(path, "test_flights")
+        plt.close()
+
+    logger.info(f"Logged {n_samples} test_flights plots to MLflow (test_flights/)")
+
+
 def train_model(
     tickets_train_data: pd.DataFrame,
     tickets_test_data: pd.DataFrame,
@@ -196,7 +304,7 @@ def train_model(
         test_mae = mean_absolute_error(y_test, y_test_pred, multioutput="uniform_average")
         test_rmse = np.sqrt(mean_squared_error(y_test, y_test_pred, multioutput="uniform_average"))
         test_r2 = r2_score(y_test, y_test_pred, multioutput="uniform_average")
-        return model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2
+        return model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, y_test_pred
 
     if log_to_mlflow:
         mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -219,7 +327,7 @@ def train_model(
             mlflow.log_table(data=features_metadata, artifact_file="training_features.json")
             logger.info(f"Logged {len(all_features)} training features to MLflow")
 
-            model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2 = _run_training_and_eval()
+            model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, y_test_pred = _run_training_and_eval()
 
             mlflow.log_metrics({
                 "train_mae": train_mae,
@@ -236,6 +344,19 @@ def train_model(
             }).sort_values("importance", ascending=False)
             mlflow.log_table(data=feature_importance, artifact_file="feature_importance.json")
             log_shap_feature_importance(model, X_test, params, top_n=5, multi_output=True)
+            n_flight_samples = params.get("test_flights_n_samples", 5)
+            unique_flights_def = params.get(
+                "unique_flights_def_columns", UNIQUE_FLIGHTS_DEF_COLUMNS
+            )
+            log_test_flights_plots(
+                y_test,
+                y_test_pred,
+                X_test,
+                target_cols,
+                params,
+                n_samples=n_flight_samples,
+                unique_flights_def_columns=unique_flights_def,
+            )
 
             logger.info("Model training completed!")
             logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
@@ -243,7 +364,7 @@ def train_model(
             logger.info(f"MLflow run ID: {mlflow.active_run().info.run_id}")
     else:
         logger.info("MLflow logging disabled (log_to_mlflow=False)")
-        model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2 = _run_training_and_eval()
+        model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, _ = _run_training_and_eval()
         logger.info("Model training completed!")
         logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
         logger.info(f"Test RMSE: {test_rmse:.2f}, Test R²: {test_r2:.4f}")
