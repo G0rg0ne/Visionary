@@ -230,6 +230,31 @@ def data_augmentation(merged_data: pd.DataFrame, airport_data: pd.DataFrame) -> 
     merged_data = merged_data.drop(columns=["od_pairs"])
     return merged_data
 
+##################### Build target vector #####################
+def build_target_vector(merged_data: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    keys = ['origin', 'destination', 'airline', 'departure_time', 'departure_date', 'days_before_departure']
+    merged_data = merged_data.sort_values('price').drop_duplicates(subset=keys)
+    merged_data['todays_price'] = merged_data['price']
+    for i in range(1, horizon):
+        future_data = merged_data[keys + ['price']].copy()
+        future_data['days_before_departure'] = future_data['days_before_departure'] + i
+        # Rename for the merge
+        future_data = future_data.rename(columns={'price': f'price_{i}'})
+        # Merge efficiently
+        merged_data = pd.merge(
+            merged_data,
+            future_data,
+            on=keys,
+            how='left'
+        )
+    return merged_data
+def clean_target_vector(merged_data: pd.DataFrame) -> pd.DataFrame:
+    target_cols = ['price_1', 'price_2', 'price_3', 'price_4', 'price_5', 'price_6', 'price_7']
+    valid_target_count = merged_data[target_cols].notna().sum(axis=1)
+    merged_data = merged_data[valid_target_count >= 5].copy()
+    fill_cols = ['todays_price', 'price_1', 'price_2', 'price_3', 'price_4', 'price_5', 'price_6', 'price_7']
+    merged_data[fill_cols] = merged_data[fill_cols].ffill(axis=1)
+    return merged_data
 ##################### split data #####################
 def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
     

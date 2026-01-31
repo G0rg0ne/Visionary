@@ -22,7 +22,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 data_augmentation,
-                inputs=["merged_data_with_holidays", "airport_data"],
+                inputs=["merged_atda_with_holidays", "airport_data"],
                 outputs="full_feature_data",
                 name="data_augmentation",
             ),
