@@ -5,7 +5,11 @@
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
 model_training_parameters:
-  run_description: "Training  with baseline hyperparameters, features v2: add airports distance"
-  n_estimators: 100
-  max_depth: 8
+  run_description: "Multi-output (vector) price prediction: price_1..price_7 horizon"
+  n_estimators: 2500
+  max_depth: 10
   random_state: 42
+  # Set to false to run training without MLflow (e.g. for quick local tests)
+  log_to_mlflow: false
+  # Optional: multi_output_horizon. If omitted, target columns (price_1, price_2, ...) are inferred from data.
+  multi_output_horizon: null

@@ -19,8 +19,10 @@ def merge_dataframes(raw_csv_data: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     if not dataframes:
         raise ValueError("No valid CSV DataFrames found in raw_csv_data")
     
-    # Merge the dataframes
+    # Merge the dataframes and drop duplicates
     merged_data = pd.concat(dataframes, ignore_index=True)
+    keys = ['origin', 'destination', 'airline', 'departure_time', 'departure_date', 'days_before_departure']
+    merged_data = merged_data.drop_duplicates(subset=keys)
     return merged_data
 
 def filter_flight(merged_data: pd.DataFrame, num_samples) -> pd.DataFrame:

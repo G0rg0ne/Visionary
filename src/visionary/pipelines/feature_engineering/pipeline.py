@@ -9,6 +9,8 @@ from .nodes import (
     feature_engineering,
     split_data,
     data_augmentation,
+    build_target_vector,
+    clean_target_vector,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -27,8 +29,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="data_augmentation",
             ),
             Node(
+                build_target_vector,
+                inputs=["full_feature_data", "params:horizon"],
+                outputs="features_with_target_vector",
+                name="build_target_vector",
+            ),
+            Node(
+                clean_target_vector,
+                inputs=["features_with_target_vector", "params:horizon"],
+                outputs="cleaned_horizon_features_with_target_vector",
+                name="clean_target_vector",
+            ),
+            Node(
                 split_data,
-                inputs="full_feature_data",
+                inputs="cleaned_horizon_features_with_target_vector",
                 outputs=["tickets_train_data", "tickets_test_data"],
                 name="split_dataset",
             ),
