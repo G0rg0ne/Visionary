@@ -87,7 +87,7 @@ def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
         merged_data[col] = merged_data[col].fillna('None').astype(str)
     return merged_data
 
-def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
+def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict,n_holiday_days: int = 7) -> pd.DataFrame:
     """Optimized holiday feature engineering using pre-computed holiday sets."""
     
     merged_data['origin_country'] = merged_data['origin'].map(airport_country_mapping)
@@ -137,37 +137,26 @@ def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd
         
         return result
     
-    def check_holiday_in_next_7days_vectorized(dates, countries):
-        """Check if there's a holiday in next 7 days using pre-computed cache."""
-        result = []
+    def get_holiday_next_n_days_columns(dates, countries, n_days=7):
+        """For each of the next n_days, return a list of bools (True if that day is a holiday).
+        Returns a list of n_days lists, each of length len(dates)."""
+        result = [[] for _ in range(n_days)]
         for date, country in zip(dates, countries):
             if pd.isna(date) or pd.isna(country) or country == 'None':
-                result.append(False)
+                for day_idx in range(n_days):
+                    result[day_idx].append(False)
                 continue
-            
             year = pd.Timestamp(date).year
-            next_date = date + pd.Timedelta(days=7)
-            
-            # Get holidays for current year and next year if crossing boundary
+            last_date = date + pd.Timedelta(days=n_days)
             years_needed = {year}
-            if next_date.year != year:
-                years_needed.add(next_date.year)
-            
-            # Combine all relevant holidays
+            if last_date.year != year:
+                years_needed.add(last_date.year)
             all_holidays = set()
             for y in years_needed:
                 all_holidays.update(holiday_cache.get((country, y), set()))
-            
-            # Check each of the next 7 days
-            has_holiday = False
-            for j in range(1, 8):
-                check_date = (date + pd.Timedelta(days=j)).date()
-                if check_date in all_holidays:
-                    has_holiday = True
-                    break
-            
-            result.append(has_holiday)
-        
+            for day_idx in range(n_days):
+                check_date = (date + pd.Timedelta(days=day_idx + 1)).date()
+                result[day_idx].append(check_date in all_holidays)
         return result
     
     logger.info("Computing holiday features...")
@@ -183,18 +172,23 @@ def add_holidays(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd
         merged_data['destination_country'].values
     )
     
-    merged_data['origin_is_holiday_next_7days'] = check_holiday_in_next_7days_vectorized(
+    origin_holiday_cols = get_holiday_next_n_days_columns(
         merged_data['departure_date'].values,
-        merged_data['origin_country'].values
+        merged_data['origin_country'].values,
+        n_days=n_holiday_days,
     )
-    
-    merged_data['destination_is_holiday_next_7days'] = check_holiday_in_next_7days_vectorized(
+    for day in range(n_holiday_days):
+        merged_data[f'origin_holiday_day_{day + 1}'] = origin_holiday_cols[day]
+
+    destination_holiday_cols = get_holiday_next_n_days_columns(
         merged_data['departure_date'].values,
-        merged_data['destination_country'].values
+        merged_data['destination_country'].values,
+        n_days=n_holiday_days,
     )
+    for day in range(n_holiday_days):
+        merged_data[f'destination_holiday_day_{day + 1}'] = destination_holiday_cols[day]
     
     logger.info("Holiday features computed successfully")
-    
     return merged_data
 
 def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
@@ -205,10 +199,10 @@ def handle_categorical_features(merged_data: pd.DataFrame) -> pd.DataFrame:
     return merged_data
 
 
-def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict) -> pd.DataFrame:
+def feature_engineering(merged_data: pd.DataFrame, airport_country_mapping: dict,n_holiday_days: int = 7) -> pd.DataFrame:
     merged_data = fix_data_types(merged_data)
     merged_data = add_temporal_features(merged_data)
-    merged_data = add_holidays(merged_data, airport_country_mapping)
+    merged_data = add_holidays(merged_data, airport_country_mapping,n_holiday_days=7)
     merged_data = handle_categorical_features(merged_data)
     return merged_data
 
@@ -288,7 +282,7 @@ def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
     cols_to_drop = ['departure_time', 'arrival_time', 'currency', 'source', 
                     'departure_date', 'departure_time_dt', 'arrival_time_dt', 
                     'query_date', 'cabin', 'offer_rank','departure_day_of_week','departure_time_minute',
-                    'departure_time_hour','arrival_time_minute','arrival_time_hour'
+                    'departure_time_hour','arrival_time_minute','arrival_time_hour',"price"
                     ]
     # Only drop columns that exist
     cols_to_drop = [col for col in cols_to_drop if col in train_data.columns]

@@ -4,7 +4,7 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
-
+n_holiday_days: 7
 airport_country_mapping:
   CDG: FR
   MAD: ES

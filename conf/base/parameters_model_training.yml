@@ -10,6 +10,6 @@ model_training_parameters:
   max_depth: 10
   random_state: 42
   # Set to false to run training without MLflow (e.g. for quick local tests)
-  log_to_mlflow: false
+  log_to_mlflow: true
   # Optional: multi_output_horizon. If omitted, target columns (price_1, price_2, ...) are inferred from data.
   multi_output_horizon: null

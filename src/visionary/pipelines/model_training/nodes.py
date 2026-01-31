@@ -148,7 +148,6 @@ def train_model(
     y_train = tickets_train_data[target_cols]
     X_test = tickets_test_data.drop(columns=target_cols)
     y_test = tickets_test_data[target_cols]
-
     categorical_features = X_train.select_dtypes(
         include=["object", "string", "bool"]
     ).columns.tolist()
