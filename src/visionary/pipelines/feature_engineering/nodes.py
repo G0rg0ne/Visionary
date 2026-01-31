@@ -248,11 +248,26 @@ def build_target_vector(merged_data: pd.DataFrame, horizon: int) -> pd.DataFrame
             how='left'
         )
     return merged_data
-def clean_target_vector(merged_data: pd.DataFrame) -> pd.DataFrame:
-    target_cols = ['price_1', 'price_2', 'price_3', 'price_4', 'price_5', 'price_6', 'price_7']
+def clean_target_vector(merged_data: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """
+    Keep rows with enough valid target values and forward-fill missing targets.
+
+    Target columns are price_1 .. price_{horizon-1} (same as build_target_vector).
+    Requires at least max(1, min(5, horizon - 1)) valid targets per row.
+    """
+    target_cols = [f"price_{i}" for i in range(1, horizon)]
+    if not target_cols:
+        return merged_data
+    # Only use columns that exist (in case upstream horizon was reduced)
+    target_cols = [c for c in target_cols if c in merged_data.columns]
+    if not target_cols:
+        logger.warning("clean_target_vector: no target columns found for horizon=%s", horizon)
+        return merged_data
+    min_valid = max(1, min(5, len(target_cols)))
     valid_target_count = merged_data[target_cols].notna().sum(axis=1)
-    merged_data = merged_data[valid_target_count >= 5].copy()
-    fill_cols = ['todays_price', 'price_1', 'price_2', 'price_3', 'price_4', 'price_5', 'price_6', 'price_7']
+    merged_data = merged_data[valid_target_count >= min_valid].copy()
+    fill_cols = ["todays_price"] + target_cols
+    fill_cols = [c for c in fill_cols if c in merged_data.columns]
     merged_data[fill_cols] = merged_data[fill_cols].ffill(axis=1)
     return merged_data
 ##################### split data #####################

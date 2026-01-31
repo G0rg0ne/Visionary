@@ -36,7 +36,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             Node(
                 clean_target_vector,
-                inputs="features_with_target_vector",
+                inputs=["features_with_target_vector", "params:horizon"],
                 outputs="cleaned_horizon_features_with_target_vector",
                 name="clean_target_vector",
             ),
