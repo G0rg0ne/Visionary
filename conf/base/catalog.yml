@@ -34,6 +34,14 @@ full_feature_data:
   type: pandas.CSVDataset
   filepath: data/04_feature/full_feature_data.csv
 
+features_with_target_vector:
+  type: pandas.CSVDataset
+  filepath: data/04_feature/features_with_target_vector.csv
+
+cleaned_horizon_features_with_target_vector:
+  type: pandas.CSVDataset
+  filepath: data/04_feature/cleaned_horizon_features_with_target_vector.csv
+
 tickets_train_data:
   type: pandas.CSVDataset
   filepath: data/04_feature/tickets_train_data.csv
