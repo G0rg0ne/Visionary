@@ -1,8 +1,9 @@
 """
 Model training nodes for the Visionary pipeline.
 
-Trains a multi-output (vector) regression model: targets are price_1, price_2, ...
-as produced by the feature engineering pipeline (build_target_vector).
+Trains two multi-output quantile models: alpha=0.1 ("Chance of price drop") and
+alpha=0.9 ("Risk of price hike"). Targets are delta_1, delta_2, ... (Δ = P_{t+n} - P_today)
+as produced by the feature engineering pipeline (build_delta_targets).
 """
 import re
 import pandas as pd
@@ -12,7 +13,7 @@ import mlflow
 import mlflow.catboost
 from loguru import logger
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 import shap
 import matplotlib.pyplot as plt
 import tempfile
@@ -22,24 +23,24 @@ from dotenv import load_dotenv
 
 def _get_target_columns(df: pd.DataFrame, horizon: int | None) -> List[str]:
     """
-    Infer multi-target columns from data. Supports price_1, price_2, ... (feature pipeline)
-    or price_d1, price_d2, ... (alternative naming).
+    Infer multi-target columns from data. Prefers delta_1, delta_2, ... (Δ = P_{t+n} - P_today)
+    as produced by feature_engineering build_delta_targets; fallback to price_1, price_2, ...
     """
-    # Prefer price_1, price_2, ... (matches feature_engineering build_target_vector)
+    # Prefer delta_1, delta_2, ... (matches feature_engineering build_delta_targets)
+    pattern_delta = re.compile(r"^delta_(\d+)$")
+    candidates = [c for c in df.columns if pattern_delta.match(c)]
+    if candidates:
+        return sorted(candidates, key=lambda x: int(pattern_delta.match(x).group(1)))
+    # Fallback: price_1, price_2, ...
     pattern = re.compile(r"^price_(\d+)$")
     candidates = [c for c in df.columns if pattern.match(c)]
     if candidates:
         target_cols = sorted(candidates, key=lambda x: int(pattern.match(x).group(1)))
         return target_cols
-    # Fallback: price_d1, price_d2, ...
-    pattern_d = re.compile(r"^price_d(\d+)$")
-    candidates_d = [c for c in df.columns if pattern_d.match(c)]
-    if candidates_d:
-        return sorted(candidates_d, key=lambda x: int(pattern_d.match(x).group(1)))
     # Build from horizon if provided
     if horizon is not None and horizon >= 1:
-        for prefix in ("price_", "price_d"):
-            try_cols = [f"{prefix}{k}" for k in range(1, horizon + 1)]
+        for prefix in ("delta_", "price_"):
+            try_cols = [f"{prefix}{k}" for k in range(1, horizon)]
             if all(c in df.columns for c in try_cols):
                 return try_cols
     return []
@@ -51,6 +52,7 @@ def log_shap_feature_importance(
     params: Dict[str, Any],
     top_n: int = 5,
     multi_output: bool = True,
+    artifact_subdir: str | None = None,
 ) -> None:
     """
     Generate and log SHAP feature importance plot to MLflow.
@@ -63,6 +65,7 @@ def log_shap_feature_importance(
         params: Dictionary containing parameters (for random_state)
         top_n: Number of top features to display (default: 5)
         multi_output: If True, aggregate SHAP over multiple target dimensions
+        artifact_subdir: Optional subdir under shap_feature_importance (e.g. "quantile_0.1")
     """
     logger.info("Computing SHAP values...")
     sample_size = min(100, len(X_test))
@@ -93,9 +96,12 @@ def log_shap_feature_importance(
     plt.gca().invert_yaxis()
     plt.tight_layout()
 
+    artifact_path = "shap_feature_importance"
+    if artifact_subdir:
+        artifact_path = f"{artifact_path}/{artifact_subdir}"
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
         plt.savefig(tmp_file.name, dpi=150, bbox_inches="tight")
-        mlflow.log_artifact(tmp_file.name, "shap_feature_importance")
+        mlflow.log_artifact(tmp_file.name, artifact_path)
         os.unlink(tmp_file.name)
 
     plt.close()
@@ -115,7 +121,7 @@ UNIQUE_FLIGHTS_DEF_COLUMNS = [
 
 def log_test_flights_plots(
     y_test: pd.DataFrame,
-    y_test_pred: np.ndarray,
+    y_test_pred_series: List[Tuple[np.ndarray, str]],
     X_test: pd.DataFrame,
     target_cols: List[str],
     params: Dict[str, Any],
@@ -129,12 +135,13 @@ def log_test_flights_plots(
     Flights are identified by grouping on unique_flights_def_columns (only columns present
     in X_test are used). One row per unique flight is plotted.
 
-    Green line = ground truth (today + price_1..price_H).
-    Blue line = prediction (today + pred_1..pred_H).
+    Green line = ground truth (today + delta_1..delta_H, i.e. actual prices).
+    Additional lines = each prediction series (today + pred_delta), e.g. "Chance of price drop" (10th pctl),
+    "Risk of price hike" (90th pctl).
 
     Args:
-        y_test: Test targets (price_1, price_2, ...)
-        y_test_pred: Model predictions, shape (n_samples, horizon)
+        y_test: Test targets (delta_1, delta_2, ... or legacy price_1, price_2, ...)
+        y_test_pred_series: List of (predictions, label), each predictions shape (n_samples, horizon)
         X_test: Test features (must contain 'todays_price')
         target_cols: List of target column names in order
         params: Parameters dict (for random_state)
@@ -176,14 +183,18 @@ def log_test_flights_plots(
     # x: 0 = today, 1..horizon = day 1..H
     x_points = np.arange(0, horizon + 1)
 
-    for i, idx in enumerate(indices):
+    # When targets are deltas (Δ = P_{t+n} - P_today), plot actual prices = today + delta
+    is_delta = target_cols and target_cols[0].startswith("delta_")
+    pred_colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+    for plot_idx, idx in enumerate(indices):
         today_price = float(X_test["todays_price"].iloc[idx])
         gt_row = y_test.iloc[idx]
-        gt_prices = [today_price] + [float(gt_row[col]) for col in target_cols]
-        pred_row = y_test_pred[idx]
-        pred_prices = [today_price] + [float(pred_row[j]) for j in range(horizon)]
+        if is_delta:
+            gt_prices = [today_price] + [today_price + float(gt_row[col]) for col in target_cols]
+        else:
+            gt_prices = [today_price] + [float(gt_row[col]) for col in target_cols]
 
-        title = f"Test flight {i + 1}: Price today and next {horizon} days"
+        title = f"Test flight {plot_idx + 1}: Price today and next {horizon} days"
         if flight_key_cols:
             row = X_test.iloc[idx]
             parts = [str(row[c]) for c in flight_key_cols]
@@ -192,7 +203,16 @@ def log_test_flights_plots(
 
         plt.figure(figsize=(8, 5))
         plt.plot(x_points, gt_prices, color="green", linewidth=2, label="Ground truth")
-        plt.plot(x_points, pred_prices, color="blue", linewidth=2, label="Prediction")
+        for series_idx, (y_pred, label) in enumerate(y_test_pred_series):
+            pred_row = y_pred[idx]
+            if is_delta:
+                pred_prices = [today_price] + [
+                    today_price + float(pred_row[j]) for j in range(horizon)
+                ]
+            else:
+                pred_prices = [today_price] + [float(pred_row[j]) for j in range(horizon)]
+            color = pred_colors[series_idx % len(pred_colors)]
+            plt.plot(x_points, pred_prices, color=color, linewidth=2, label=label)
         plt.xlabel("Day (0 = today)")
         plt.ylabel("Price")
         plt.title(title)
@@ -202,7 +222,7 @@ def log_test_flights_plots(
         plt.tight_layout()
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = os.path.join(tmpdir, f"sample_{i}.png")
+            path = os.path.join(tmpdir, f"sample_{plot_idx}.png")
             plt.savefig(path, dpi=150, bbox_inches="tight")
             mlflow.log_artifact(path, "test_flights")
         plt.close()
@@ -216,10 +236,11 @@ def train_model(
     params: Dict[str, Any],
 ) -> None:
     """
-    Train a CatBoost multi-output (vector) regression model and log to MLflow.
+    Train two CatBoost multi-output quantile models and log to MLflow:
+    - alpha=0.1: "Chance of price drop" (10th percentile)
+    - alpha=0.9: "Risk of price hike" (90th percentile)
 
-    Targets are inferred from data: price_1, price_2, ... (or price_d1, price_d2, ...).
-    Uses MultiRMSE loss and uniform_average metrics across target dimensions.
+    Targets are inferred from data: delta_1, delta_2, ... (or legacy price_1, price_2, ...).
 
     Args:
         tickets_train_data: Training dataset with features and target vector
@@ -233,8 +254,8 @@ def train_model(
     target_cols = _get_target_columns(tickets_train_data, horizon_param)
     if not target_cols:
         raise ValueError(
-            "No multi-target columns found. Expected price_1, price_2, ... (or price_d1, price_d2, ...). "
-            "Ensure feature pipeline build_target_vector has run."
+            "No multi-target columns found. Expected delta_1, delta_2, ... (or legacy price_1, price_2, ...). "
+            "Ensure feature pipeline build_delta_targets has run."
         )
 
     categorical_features = tickets_train_data.select_dtypes(
@@ -266,12 +287,10 @@ def train_model(
     logger.info(f"Categorical features: {categorical_features}")
     logger.info(f"Numerical features: {len(X_train.columns) - len(categorical_features)}")
 
-    catboost_params = {
+    base_params = {
         "iterations": params.get("n_estimators", 2500),
         "depth": params.get("max_depth", 10),
         "random_state": params.get("random_state", 42),
-        "loss_function": "MultiRMSE",
-        "eval_metric": "MultiRMSE",
         "verbose": False,
         "grow_policy": "Lossguide",
         "max_leaves": 64,
@@ -282,12 +301,19 @@ def train_model(
         "cat_features": categorical_features if categorical_features else None,
         "allow_writing_files": False,
     }
-    catboost_params = {k: v for k, v in catboost_params.items() if v is not None}
+    base_params = {k: v for k, v in base_params.items() if v is not None}
+
+    quantile_configs = [
+        (0.1, "Chance of price drop", "model_quantile_0.1"),
+        (0.9, "Risk of price hike", "model_quantile_0.9"),
+    ]
 
     log_to_mlflow = params.get("log_to_mlflow", True)
 
-    def _run_training_and_eval():
-        logger.info("Training CatBoost multi-output model...")
+    def _run_training_and_eval(alpha: float):
+        loss = f"MultiQuantile:alpha={alpha}"
+        catboost_params = {**base_params, "loss_function": loss, "eval_metric": loss}
+        logger.info("Training CatBoost multi-output quantile model (alpha=%s)...", alpha)
         model = CatBoostRegressor(**catboost_params)
         model.fit(
             X_train,
@@ -295,7 +321,7 @@ def train_model(
             eval_set=(X_test, y_test),
             verbose=False,
         )
-        logger.info("Making predictions...")
+        logger.info("Making predictions (alpha=%s)...", alpha)
         y_train_pred = model.predict(X_train)
         y_test_pred = model.predict(X_test)
         train_mae = mean_absolute_error(y_train, y_train_pred, multioutput="uniform_average")
@@ -311,13 +337,14 @@ def train_model(
         mlflow.set_experiment("visionary_price_prediction (Multi-target)")
 
         with mlflow.start_run(description=params.get("run_description", "")):
-            mlflow.log_params(catboost_params)
+            mlflow.log_params(base_params)
             mlflow.log_params({
                 "train_size": len(X_train),
                 "test_size": len(X_test),
                 "n_features": len(X_train.columns),
                 "n_categorical_features": len(categorical_features),
                 "multi_output_horizon": len(target_cols),
+                "quantile_alphas": [0.1, 0.9],
             })
             all_features = X_train.columns.tolist()
             features_metadata = pd.DataFrame({
@@ -327,30 +354,40 @@ def train_model(
             mlflow.log_table(data=features_metadata, artifact_file="training_features.json")
             logger.info(f"Logged {len(all_features)} training features to MLflow")
 
-            model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, y_test_pred = _run_training_and_eval()
+            y_test_pred_series: List[Tuple[np.ndarray, str]] = []
+            for alpha, label, artifact_path in quantile_configs:
+                model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, y_test_pred = _run_training_and_eval(alpha)
+                suffix = f"_quantile_{alpha}"
+                mlflow.log_metrics({
+                    f"train_mae{suffix}": train_mae,
+                    f"train_rmse{suffix}": train_rmse,
+                    f"train_r2{suffix}": train_r2,
+                    f"test_mae{suffix}": test_mae,
+                    f"test_rmse{suffix}": test_rmse,
+                    f"test_r2{suffix}": test_r2,
+                })
+                mlflow.catboost.log_model(model, artifact_path=artifact_path)
+                feature_importance = pd.DataFrame({
+                    "feature": X_train.columns,
+                    "importance": model.get_feature_importance(),
+                }).sort_values("importance", ascending=False)
+                mlflow.log_table(
+                    data=feature_importance,
+                    artifact_file=f"feature_importance{suffix}.json",
+                )
+                log_shap_feature_importance(
+                    model, X_test, params, top_n=5, multi_output=True,
+                    artifact_subdir=f"quantile_{alpha}",
+                )
+                y_test_pred_series.append((y_test_pred, label))
 
-            mlflow.log_metrics({
-                "train_mae": train_mae,
-                "train_rmse": train_rmse,
-                "train_r2": train_r2,
-                "test_mae": test_mae,
-                "test_rmse": test_rmse,
-                "test_r2": test_r2,
-            })
-            mlflow.catboost.log_model(model, artifact_path="model")
-            feature_importance = pd.DataFrame({
-                "feature": X_train.columns,
-                "importance": model.get_feature_importance(),
-            }).sort_values("importance", ascending=False)
-            mlflow.log_table(data=feature_importance, artifact_file="feature_importance.json")
-            log_shap_feature_importance(model, X_test, params, top_n=5, multi_output=True)
             n_flight_samples = params.get("test_flights_n_samples", 5)
             unique_flights_def = params.get(
                 "unique_flights_def_columns", UNIQUE_FLIGHTS_DEF_COLUMNS
             )
             log_test_flights_plots(
                 y_test,
-                y_test_pred,
+                y_test_pred_series,
                 X_test,
                 target_cols,
                 params,
@@ -358,13 +395,11 @@ def train_model(
                 unique_flights_def_columns=unique_flights_def,
             )
 
-            logger.info("Model training completed!")
-            logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
-            logger.info(f"Test RMSE: {test_rmse:.2f}, Test R²: {test_r2:.4f}")
+            logger.info("Model training completed (quantile 0.1 + 0.9).")
             logger.info(f"MLflow run ID: {mlflow.active_run().info.run_id}")
     else:
         logger.info("MLflow logging disabled (log_to_mlflow=False)")
-        model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, _ = _run_training_and_eval()
-        logger.info("Model training completed!")
-        logger.info(f"Train RMSE: {train_rmse:.2f}, Train R²: {train_r2:.4f}")
-        logger.info(f"Test RMSE: {test_rmse:.2f}, Test R²: {test_r2:.4f}")
+        for alpha, label, _ in quantile_configs:
+            model, train_mae, train_rmse, train_r2, test_mae, test_rmse, test_r2, _ = _run_training_and_eval(alpha)
+            logger.info("Model (alpha=%s) - Train RMSE: %.2f, Test RMSE: %.2f", alpha, train_rmse, test_rmse)
+        logger.info("Model training completed (quantile 0.1 + 0.9).")

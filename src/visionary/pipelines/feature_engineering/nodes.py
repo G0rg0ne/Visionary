@@ -264,6 +264,29 @@ def clean_target_vector(merged_data: pd.DataFrame, horizon: int) -> pd.DataFrame
     fill_cols = [c for c in fill_cols if c in merged_data.columns]
     merged_data[fill_cols] = merged_data[fill_cols].ffill(axis=1)
     return merged_data
+
+
+def build_delta_targets(merged_data: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """
+    After cleaning/imputing, convert future price targets to deltas (Δ_n = P_{t+n} - P_today)
+    and drop the raw price_1, price_2, ... columns. Keeps todays_price as a feature.
+    """
+    price_cols = [f"price_{i}" for i in range(1, horizon)]
+    price_cols = [c for c in price_cols if c in merged_data.columns]
+    if not price_cols:
+        logger.warning("build_delta_targets: no price_* columns found for horizon=%s", horizon)
+        return merged_data
+    if "todays_price" not in merged_data.columns:
+        logger.warning("build_delta_targets: todays_price not found")
+        return merged_data
+    for i in range(1, horizon):
+        col = f"price_{i}"
+        if col in merged_data.columns:
+            merged_data[f"delta_{i}"] = merged_data[col] - merged_data["todays_price"]
+    merged_data = merged_data.drop(columns=price_cols)
+    return merged_data
+
+
 ##################### split data #####################
 def split_data(merged_data: pd.DataFrame) -> pd.DataFrame:
     
