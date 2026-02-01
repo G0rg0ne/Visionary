@@ -11,6 +11,7 @@ from .nodes import (
     data_augmentation,
     build_target_vector,
     clean_target_vector,
+    build_delta_targets,
 )
 
 def create_pipeline(**kwargs) -> Pipeline:
@@ -41,8 +42,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="clean_target_vector",
             ),
             Node(
+                build_delta_targets,
+                inputs=["cleaned_horizon_features_with_target_vector", "params:horizon"],
+                outputs="features_with_delta_targets",
+                name="build_delta_targets",
+            ),
+            Node(
                 split_data,
-                inputs="cleaned_horizon_features_with_target_vector",
+                inputs="features_with_delta_targets",
                 outputs=["tickets_train_data", "tickets_test_data"],
                 name="split_dataset",
             ),
