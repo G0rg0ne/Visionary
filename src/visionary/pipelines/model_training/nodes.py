@@ -54,11 +54,13 @@ def train_autogluon_model(
     if known_covariates is not None:
         known_covariates = [c for c in known_covariates if c in timeseries_train.columns]
 
+    freq = params.get("freq", "D")
     predictor = TimeSeriesPredictor(
         target="target",
         prediction_length=prediction_length,
         eval_metric=eval_metric,
         path=path,
+        freq=freq,
         known_covariates_names=known_covariates or None,
         verbosity=params.get("verbosity", 2),
     )
@@ -78,15 +80,32 @@ def train_autogluon_model(
         presets=presets,
     )
 
-    logger.info("Evaluating on test set (temporal holdout)...")
-    test_metrics = predictor.evaluate(test_ts)
-    leaderboard = predictor.leaderboard(test_ts, silent=True)
+    min_length_for_eval = prediction_length + 1
+    steps_per_item = test_ts.num_timesteps_per_item()
+    valid_item_ids = steps_per_item[steps_per_item >= min_length_for_eval].index
+    test_ts_eval = test_ts.loc[valid_item_ids] if len(valid_item_ids) > 0 else None
 
-    logger.info("Test metrics: %s", test_metrics)
-    if leaderboard is not None and not leaderboard.empty:
-        best_model = leaderboard.index[0]
-        logger.info("Best model: %s", best_model)
-        logger.info("Leaderboard:\n%s", leaderboard.to_string())
+    test_metrics = None
+    leaderboard = None
+    if test_ts_eval is not None and len(test_ts_eval) > 0:
+        logger.info(
+            "Evaluating on test set (temporal holdout), %s series with >= %s steps",
+            test_ts_eval.num_items,
+            min_length_for_eval,
+        )
+        test_metrics = predictor.evaluate(test_ts_eval)
+        leaderboard = predictor.leaderboard(test_ts_eval, silent=True)
+        logger.info("Test metrics: %s", test_metrics)
+        if leaderboard is not None and not leaderboard.empty:
+            best_model = leaderboard.index[0]
+            logger.info("Best model: %s", best_model)
+            logger.info("Leaderboard:\n%s", leaderboard.to_string())
+    else:
+        logger.warning(
+            "Skipping evaluation: no test time series have length >= %s (got %s items)",
+            min_length_for_eval,
+            len(valid_item_ids),
+        )
 
     log_to_mlflow = params.get("log_to_mlflow", True)
     if log_to_mlflow:
@@ -94,7 +113,7 @@ def train_autogluon_model(
             params=params,
             predictor=predictor,
             train_ts=train_ts,
-            test_ts=test_ts,
+            test_ts=test_ts_eval if test_ts_eval is not None else test_ts,
             test_metrics=test_metrics,
             leaderboard=leaderboard,
         )

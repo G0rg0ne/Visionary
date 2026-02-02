@@ -7,6 +7,7 @@ model_training_parameters:
   time_limit: 3600
   presets: "medium_quality"
   eval_metric: "MAPE"
+  freq: "D"  # daily frequency (one price observation per day per flight)
   log_to_mlflow: false
   path: "data/06_models/autogluon"
   verbosity: 2
