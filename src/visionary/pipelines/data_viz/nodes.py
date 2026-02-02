@@ -20,25 +20,25 @@ class FigureGenerator:
     def _generate(self):
         # Convert date columns to datetime
         merged_data = self.merged_data.copy()
-        merged_data['query_date'] = pd.to_datetime(merged_data['query_date'])
-        merged_data['departure_date'] = pd.to_datetime(merged_data['departure_date'])
-        unique_flights_def_columns = ["origin","destination", "departure_date","departure_time", "airline","flight_duration"]
+        unique_flights_def_columns = ["origin","destination", "airline","departure_date","departure_time_dt", "arrival_time_dt","flight_duration"]
         # Group by unique flight
         flight_groups = merged_data.groupby(unique_flights_def_columns)
-        
+        num_unique_flights = flight_groups.ngroups
+        logger.info(f"Visualization: generating plots for {num_unique_flights} unique flight(s)")
+
         # Create and yield a figure for each unique flight
         for group_key, group in flight_groups:
-            # Unpack the groupby key safely
-            if isinstance(group_key, tuple) and len(group_key) == 6:
-                origin, dest, dep_date, dep_time, airline, flight_duration = group_key
+            # Unpack the groupby key safely (7 columns: origin, destination, airline, departure_date, departure_time_dt, arrival_time_dt, flight_duration)
+            if isinstance(group_key, tuple) and len(group_key) == 7:
+                origin, dest, airline, dep_date, dep_time_dt, arr_time_dt, flight_duration = group_key
             else:
                 raise ValueError(f"Unexpected groupby key structure: {group_key} (type: {type(group_key)})")
             
             # Sort by days_before_departure to show evolution as departure approaches
             group_sorted = group.sort_values('days_before_departure')
-            price_variation = group_sorted['price'].nunique() > 1
-            # Create a unique flight identifier for the dictionary key
-            flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d')}_{dep_time.replace(':', '-').replace(' ', '_')}_{airline}_{flight_duration}"
+            # Create a unique flight identifier for the dictionary key (dep_time_dt/arr_time_dt may be time objects)
+            dep_time_str = str(dep_time_dt).replace(':', '-').replace(' ', '_') if dep_time_dt is not None else ''
+            flight_id = f"{origin}_{dest}_{dep_date.strftime('%Y-%m-%d') if hasattr(dep_date, 'strftime') else dep_date}_{dep_time_str}_{airline}_{flight_duration}"
             
             # Create figure for this flight
             fig, ax = plt.subplots(figsize=(10, 6))
@@ -55,7 +55,7 @@ class FigureGenerator:
             # Formatting
             ax.set_xlabel('Days Before Departure', fontsize=12)
             ax.set_ylabel('Price', fontsize=12)
-            ax.set_title(f'Price Evolution: {origin} → {dest} | {dep_date.strftime("%Y-%m-%d")} {dep_time}', 
+            ax.set_title(f'Price Evolution: {origin} → {dest} | {airline} | {dep_date.strftime("%Y-%m-%d") if hasattr(dep_date, "strftime") else dep_date} {dep_time_dt}',
                          fontsize=14, fontweight='bold')
             ax.grid(True, alpha=0.3)
             # Reverse x-axis to show evolution from oldest to newest (approaching departure)

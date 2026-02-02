@@ -19,6 +19,18 @@ sampled_dataset:
   type: pandas.CSVDataset
   filepath: data/02_intermediate/sampled_dataset.csv
 
+timeseries_prepared:
+  type: pandas.CSVDataset
+  filepath: data/03_primary/timeseries_prepared.csv
+
+timeseries_train:
+  type: pandas.CSVDataset
+  filepath: data/05_model_input/timeseries_train.csv
+
+timeseries_test:
+  type: pandas.CSVDataset
+  filepath: data/05_model_input/timeseries_test.csv
+
 ########################################## DATA VISUALIZATION ##########################################
 ticket_evolution: 
   type: visionary.datasets.generator_figure_dataset.GeneratorFigureDataset
@@ -53,6 +65,10 @@ tickets_train_data:
 tickets_test_data:
   type: pandas.CSVDataset
   filepath: data/04_feature/tickets_test_data.csv
+
+autogluon_predictor:
+  type: pickle.PickleDataset
+  filepath: data/06_models/autogluon/predictor.pkl
 
 airport_data:
   type: visionary.datasets.dat_dataset.dat_airport_dataset

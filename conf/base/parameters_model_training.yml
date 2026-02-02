@@ -1,25 +1,12 @@
-# This is a boilerplate parameters config generated for pipeline 'model_training'
-# using Kedro 1.1.1.
-#
-# Documentation for this file format can be found in "Parameters"
+# AutoGluon time series forecasting parameters
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
 model_training_parameters:
-  run_description: "Multi-output (vector) price prediction: price_1..price_7 horizon"
-  n_estimators: 2500
-  max_depth: 10
-  random_state: 42
-  # Set to false to run training without MLflow (e.g. for quick local tests)
-  log_to_mlflow: true
-  # Optional: multi_output_horizon. If omitted, target columns (price_1, price_2, ...) are inferred from data.
-  multi_output_horizon: null
-  # Number of sample "test flight" plots (prediction vs ground truth) to log under MLflow artifacts test_flights/
-  test_flights_n_samples: 5
-  # Columns defining a unique flight for test_flights plots (only columns present in test data are used)
-  unique_flights_def_columns:
-    - origin
-    - destination
-    - departure_date
-    - departure_time
-    - airline
-    - flight_duration
+  run_description: "AutoGluon time series: 7-day ahead flight price forecasting"
+  forecast_horizon: 7
+  time_limit: 3600
+  presets: "medium_quality"
+  eval_metric: "MAPE"
+  log_to_mlflow: false
+  path: "data/06_models/autogluon"
+  verbosity: 2

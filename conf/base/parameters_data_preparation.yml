@@ -5,3 +5,10 @@
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
 num_samples: 15
+
+timeseries_preparation:
+  forward_fill_limit: 3
+
+train_test_split:
+  test_size: 0.2
+  split_by: "query_date"
