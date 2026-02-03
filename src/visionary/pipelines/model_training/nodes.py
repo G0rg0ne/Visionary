@@ -2,8 +2,8 @@
 Model training nodes for the Visionary pipeline.
 
 Trains AutoGluon time series forecasting models to predict flight prices
-up to a configurable horizon. Uses temporal train/test split on query_date
-to avoid data leakage.
+up to a configurable horizon. Expects per-flight train/test split (last N
+timesteps per flight in test) so every flight has the same test length for evaluation.
 """
 import os
 from pathlib import Path
@@ -23,7 +23,7 @@ def train_autogluon_model(
 ) -> TimeSeriesPredictor:
     """
     Train AutoGluon time series models on flight price data and return the
-    fitted predictor. Uses temporal split: train = past, test = future.
+    fitted predictor. Expects per-flight split: each flight has same number of test timesteps.
 
     Args:
         timeseries_train: Training data with item_id, timestamp, target.
@@ -47,7 +47,6 @@ def train_autogluon_model(
         id_column="item_id",
         timestamp_column="timestamp",
     )
-
     prediction_length = params.get("forecast_horizon", 7)
     eval_metric = params.get("eval_metric", "MAPE")
     known_covariates = params.get("known_covariates_names")
@@ -77,16 +76,24 @@ def train_autogluon_model(
         presets=presets,
     )
 
+    # AutoGluon requires each evaluation series to have length > prediction_length (at least 8)
     min_length_for_eval = prediction_length + 1
     steps_per_item = test_ts.num_timesteps_per_item()
     valid_item_ids = steps_per_item[steps_per_item >= min_length_for_eval].index
+    if len(valid_item_ids) < len(steps_per_item):
+        bad = steps_per_item[steps_per_item < min_length_for_eval]
+        raise ValueError(
+            f"Cannot evaluate: {len(bad)} test series have fewer than {min_length_for_eval} timesteps "
+            f"(need length > prediction_length={prediction_length}). "
+            "Re-run the data_preparation_pipeline so timeseries_test is regenerated with test_timesteps >= 8."
+        )
     test_ts_eval = test_ts.loc[valid_item_ids] if len(valid_item_ids) > 0 else None
 
     test_metrics = None
     leaderboard = None
     if test_ts_eval is not None and len(test_ts_eval) > 0:
         logger.info(
-            f"Evaluating on test set (temporal holdout), {test_ts_eval.num_items} series with >= {min_length_for_eval} steps"
+            f"Evaluating on test set ({test_ts_eval.num_items} series, {min_length_for_eval}+ steps each)"
         )
         test_metrics = predictor.evaluate(test_ts_eval)
         leaderboard = predictor.leaderboard(test_ts_eval, silent=True)
