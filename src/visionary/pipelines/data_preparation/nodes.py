@@ -141,27 +141,36 @@ def split_timeseries_data(
     timeseries_prepared: pd.DataFrame, params: Dict
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Split time series into train and test by query_date (timestamp) to avoid
-    data leakage: train = all observations with timestamp <= split_date,
-    test = all observations with timestamp > split_date.
+    Split time series into train and test per flight (item_id): for each flight,
+    take the last test_timesteps rows as test, the rest as train. Ensures every
+    flight contributes exactly test_timesteps points to the test set for evaluation.
     """
     df = timeseries_prepared.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"])
-    unique_dates = df["timestamp"].dt.normalize().unique()
-    unique_dates = sorted(unique_dates)
 
-    test_size = params.get("test_size", 0.2)
-    min_test_dates = params.get("min_test_dates", 8)
-    n_dates = len(unique_dates)
-    n_test_dates = max(1, int(n_dates * test_size))
-    n_test_dates = max(n_test_dates, min(min_test_dates, n_dates - 1))
-    n_test_dates = min(n_test_dates, n_dates - 1)
-    split_idx = n_dates - n_test_dates
-    split_date = unique_dates[split_idx]
+    test_timesteps = params.get("test_timesteps", 7)
+    min_train_timesteps = params.get("min_train_timesteps", 8)
+    min_total = min_train_timesteps + test_timesteps
 
-    train_mask = df["timestamp"].dt.normalize() <= split_date
-    test_mask = df["timestamp"].dt.normalize() > split_date
+    train_rows = []
+    test_rows = []
 
-    train_data = df[train_mask].copy()
-    test_data = df[test_mask].copy()
+    for item_id, group in df.groupby("item_id", sort=False):
+        group = group.sort_values("timestamp").reset_index(drop=True)
+        n = len(group)
+        if n < min_total:
+            continue
+        train_rows.append(group.iloc[: -test_timesteps])
+        test_rows.append(group.iloc[-test_timesteps:])
+
+    if not train_rows or not test_rows:
+        raise ValueError(
+            f"No flights have at least {min_total} timesteps "
+            f"(min_train={min_train_timesteps}, test={test_timesteps}). "
+            "Increase num_samples or reduce min_train_timesteps/test_timesteps."
+        )
+
+    train_data = pd.concat(train_rows, ignore_index=True)
+    test_data = pd.concat(test_rows, ignore_index=True)
+
     return train_data, test_data
