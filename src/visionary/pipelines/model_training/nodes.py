@@ -69,10 +69,7 @@ def train_autogluon_model(
     presets = params.get("presets", "medium_quality")
 
     logger.info(
-        "Training AutoGluon time series models: prediction_length=%s, time_limit=%s, presets=%s",
-        prediction_length,
-        time_limit,
-        presets,
+        f"Training AutoGluon time series models: prediction_length={prediction_length}, time_limit={time_limit}, presets={presets}"
     )
     predictor.fit(
         train_data=train_ts,
@@ -89,22 +86,18 @@ def train_autogluon_model(
     leaderboard = None
     if test_ts_eval is not None and len(test_ts_eval) > 0:
         logger.info(
-            "Evaluating on test set (temporal holdout), %s series with >= %s steps",
-            test_ts_eval.num_items,
-            min_length_for_eval,
+            f"Evaluating on test set (temporal holdout), {test_ts_eval.num_items} series with >= {min_length_for_eval} steps"
         )
         test_metrics = predictor.evaluate(test_ts_eval)
         leaderboard = predictor.leaderboard(test_ts_eval, silent=True)
-        logger.info("Test metrics: %s", test_metrics)
+        logger.info(f"Test metrics: {test_metrics}")
         if leaderboard is not None and not leaderboard.empty:
             best_model = leaderboard.index[0]
-            logger.info("Best model: %s", best_model)
-            logger.info("Leaderboard:\n%s", leaderboard.to_string())
+            logger.info(f"Best model: {best_model}")
+            logger.info(f"Leaderboard:\n{leaderboard.to_string()}")
     else:
         logger.warning(
-            "Skipping evaluation: no test time series have length >= %s (got %s items)",
-            min_length_for_eval,
-            len(valid_item_ids),
+            f"Skipping evaluation: no test time series have length >= {min_length_for_eval} (got {len(valid_item_ids)} items)"
         )
 
     log_to_mlflow = params.get("log_to_mlflow", True)
@@ -157,4 +150,4 @@ def _log_autogluon_to_mlflow(
         if leaderboard is not None and not leaderboard.empty:
             mlflow.log_table(data=leaderboard.reset_index(), artifact_file="leaderboard.json")
         mlflow.log_param("predictor_path", str(predictor.path))
-        logger.info("MLflow run logged: %s", mlflow.active_run().info.run_id)
+        logger.info(f"MLflow run logged: {mlflow.active_run().info.run_id}")

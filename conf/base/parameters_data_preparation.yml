@@ -11,4 +11,5 @@ timeseries_preparation:
 
 train_test_split:
   test_size: 0.2
+  min_test_dates: 8  # at least 8 test days so AutoGluon can evaluate (prediction_length+1)
   split_by: "query_date"

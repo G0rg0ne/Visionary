@@ -151,8 +151,11 @@ def split_timeseries_data(
     unique_dates = sorted(unique_dates)
 
     test_size = params.get("test_size", 0.2)
+    min_test_dates = params.get("min_test_dates", 8)
     n_dates = len(unique_dates)
     n_test_dates = max(1, int(n_dates * test_size))
+    n_test_dates = max(n_test_dates, min(min_test_dates, n_dates - 1))
+    n_test_dates = min(n_test_dates, n_dates - 1)
     split_idx = n_dates - n_test_dates
     split_date = unique_dates[split_idx]
 
