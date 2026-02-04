@@ -70,6 +70,10 @@ autogluon_predictor:
   type: pickle.PickleDataset
   filepath: data/06_models/autogluon/predictor.pkl
 
+performance_plots:
+  type: matplotlib.MatplotlibDataset
+  filepath: data/08_reporting/performance_plots
+
 airport_data:
   type: visionary.datasets.dat_dataset.dat_airport_dataset
   filepath: data/03_primary/airports.dat
