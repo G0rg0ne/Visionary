@@ -4,4 +4,11 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/1.1.1/configuration/parameters.html
 
-num_samples: 15
+num_samples: 17  # Need > 16 so each flight has >= 17 points (8 train + 9 test)
+
+timeseries_preparation:
+  forward_fill_limit: 3
+
+train_test_split:
+  test_timesteps: 9  # Each flight: 9 test steps (AutoGluon requires length > prediction_length, i.e. >= 8)
+  min_train_timesteps: 8  # Minimum timesteps required in train per flight

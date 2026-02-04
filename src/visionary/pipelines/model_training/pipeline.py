@@ -5,20 +5,29 @@ generated using Kedro 1.1.1
 
 from kedro.pipeline import Node, Pipeline  # noqa
 
-from .nodes import (
-    train_model, 
-)
+from .nodes import create_performance_plots, train_autogluon_model
+
 
 def create_pipeline(**kwargs) -> Pipeline:
     return Pipeline([
         Node(
-            train_model,
+            train_autogluon_model,
             inputs=[
-                "tickets_train_data",
-                "tickets_test_data",
+                "timeseries_train",
+                "timeseries_test",
                 "params:model_training_parameters",
             ],
-            name="train_model",
-            outputs= None,
+            outputs="autogluon_predictor",
+            name="train_autogluon",
+        ),
+        Node(
+            create_performance_plots,
+            inputs=[
+                "autogluon_predictor",
+                "timeseries_test",
+                "params:model_training_parameters",
+            ],
+            outputs="performance_plots",
+            name="create_performance_plots",
         ),
     ])
